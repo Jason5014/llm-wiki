@@ -77,17 +77,21 @@ setup-collector:
 # ─────────────────────────────────────────────
 
 milvus:
-	@echo ">>> 启动 Milvus..."
-	docker compose up -d
-	@echo ">>> 等待 Milvus 就绪（最多 30s）..."
-	@for i in $$(seq 1 10); do \
-		sleep 3; \
-		if curl -sf http://localhost:9091/healthz > /dev/null 2>&1; then \
-			echo "✅ Milvus 已启动：http://localhost:9091/healthz"; \
-			break; \
-		fi; \
-		echo "  等待中... ($$i/10)"; \
-	done
+	@if curl -sf http://localhost:9091/healthz > /dev/null 2>&1; then \
+		echo "✅ Milvus 已在运行：http://localhost:9091/healthz"; \
+	else \
+		echo ">>> 启动 Milvus..."; \
+		docker compose up -d || (echo "⚠️  启动失败，尝试重建容器..." && docker compose down && docker compose up -d); \
+		echo ">>> 等待 Milvus 就绪（最多 30s）..."; \
+		for i in $$(seq 1 10); do \
+			sleep 3; \
+			if curl -sf http://localhost:9091/healthz > /dev/null 2>&1; then \
+				echo "✅ Milvus 已启动：http://localhost:9091/healthz"; \
+				break; \
+			fi; \
+			echo "  等待中... ($$i/10)"; \
+		done; \
+	fi
 
 milvus-stop:
 	docker compose down

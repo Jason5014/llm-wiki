@@ -77,20 +77,29 @@ open_new_terminal() {
 
 # ── 1. 启动 Milvus ────────────────────────────
 if [ -z "$SKIP_MILVUS" ]; then
-  log_info "启动 Milvus..."
-  docker compose up -d
+  # 先检测是否已在运行，避免容器名冲突
+  if curl -sf http://localhost:9091/healthz > /dev/null 2>&1; then
+    log_ok "Milvus 已在运行，跳过启动 ✅"
+  else
+    log_info "启动 Milvus..."
+    if ! docker compose up -d 2>&1; then
+      log_warn "docker compose up 失败（可能容器名冲突），尝试重建..."
+      docker compose down 2>/dev/null || true
+      docker compose up -d
+    fi
 
-  log_info "等待 Milvus 就绪..."
-  for i in $(seq 1 15); do
-    sleep 2
-    if curl -sf http://localhost:9091/healthz > /dev/null 2>&1; then
-      log_ok "Milvus 就绪 ✅"
-      break
-    fi
-    if [ $i -eq 15 ]; then
-      log_warn "Milvus 启动超时，继续启动其他服务（可稍后重试）"
-    fi
-  done
+    log_info "等待 Milvus 就绪..."
+    for i in $(seq 1 15); do
+      sleep 2
+      if curl -sf http://localhost:9091/healthz > /dev/null 2>&1; then
+        log_ok "Milvus 就绪 ✅"
+        break
+      fi
+      if [ $i -eq 15 ]; then
+        log_warn "Milvus 启动超时，继续启动其他服务（可稍后重试）"
+      fi
+    done
+  fi
 fi
 
 # ── 2. 启动 FastAPI ───────────────────────────

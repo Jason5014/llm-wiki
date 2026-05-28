@@ -1,5 +1,3 @@
-version: "3.9"
-
 # Milvus Standalone — 向量数据库
 # 启动命令: docker compose up -d
 # 停止命令: docker compose down
