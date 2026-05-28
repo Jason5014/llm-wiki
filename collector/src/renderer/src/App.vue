@@ -49,7 +49,7 @@
 
     <!-- 主内容区 -->
     <div class="main-content">
-      <router-view />
+      <router-view class="route-content" />
     </div>
 
     <!-- 底部状态栏 -->
@@ -177,5 +177,13 @@ html, body, #app {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+/* router-view 渲染的组件需要作为 flex 子项填满 main-content */
+.main-content :deep(.route-content) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 </style>

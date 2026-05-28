@@ -57,21 +57,23 @@
       </el-dropdown>
     </div>
 
-    <!-- 内嵌浏览器 -->
-    <!-- partition="persist:wiki-collector" 确保 Cookie 跨重启持久化 -->
-    <webview
-      ref="webviewEl"
-      class="browser-webview"
-      :src="currentUrl"
-      partition="persist:wiki-collector"
-      allowpopups
-      webpreferences="contextIsolation=false"
-      @did-start-loading="isLoading = true"
-      @did-stop-loading="onStopLoading"
-      @did-navigate="onNavigate"
-      @did-navigate-in-page="onNavigate"
-      @page-title-updated="onTitleUpdated"
-    />
+    <!-- 内嵌浏览器容器：用 position: relative 包裹，让 webview 绝对定位铺满 -->
+    <!-- webview 是 Electron 特殊元素，flex: 1 无法可靠撑高，需要 absolute 布局 -->
+    <div class="webview-container">
+      <webview
+        ref="webviewEl"
+        class="browser-webview"
+        :src="currentUrl"
+        partition="persist:wiki-collector"
+        allowpopups
+        webpreferences="contextIsolation=false"
+        @did-start-loading="isLoading = true"
+        @did-stop-loading="onStopLoading"
+        @did-navigate="onNavigate"
+        @did-navigate-in-page="onNavigate"
+        @page-title-updated="onTitleUpdated"
+      />
+    </div>
 
     <!-- 保存预览弹窗 -->
     <el-dialog
@@ -297,7 +299,7 @@ onMounted(() => {
 .browser-view {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1;          /* 作为 main-content 的 flex 子项，比 height:100% 更可靠 */
   overflow: hidden;
 }
 
@@ -315,11 +317,21 @@ onMounted(() => {
   flex: 1;
 }
 
-.browser-webview {
+/* webview 容器：flex: 1 撑满剩余高度，relative 定位给 webview 提供锚点 */
+.webview-container {
   flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+/* webview 绝对定位铺满容器 —— 这是让 Electron webview 可靠填充高度的标准方式 */
+.browser-webview {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
+  height: 100%;
   border: none;
-  display: block;
 }
 
 .preview-content {
