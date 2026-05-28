@@ -77,34 +77,22 @@ open_new_terminal() {
 
 # ── 1. 启动 Milvus ────────────────────────────
 if [ -z "$SKIP_MILVUS" ]; then
-  # 先检测是否已在运行，跳过避免重复启动
-  if curl -sf http://localhost:9091/healthz > /dev/null 2>&1; then
-    log_ok "Milvus 已在运行，跳过启动 ✅"
-  else
-    log_info "启动 Milvus..."
+  log_info "启动 Milvus..."
+  # docker compose up -d 天然幂等：已运行则不动，未运行则创建
+  # 项目名固定为 llm-wiki（见 docker-compose.yml name 字段），不与其他项目冲突
+  docker compose up -d
 
-    # 清理可能残留的同名容器（无论由哪个 compose 项目创建）
-    for cname in milvus-standalone milvus-etcd milvus-minio; do
-      if docker ps -a --format '{{.Names}}' | grep -qx "$cname"; then
-        log_warn "发现残留容器 $cname，强制删除..."
-        docker rm -f "$cname" 2>/dev/null || true
-      fi
-    done
-
-    docker compose up -d
-
-    log_info "等待 Milvus 就绪..."
-    for i in $(seq 1 15); do
-      sleep 2
-      if curl -sf http://localhost:9091/healthz > /dev/null 2>&1; then
-        log_ok "Milvus 就绪 ✅"
-        break
-      fi
-      if [ $i -eq 15 ]; then
-        log_warn "Milvus 启动超时，继续启动其他服务（可稍后重试）"
-      fi
-    done
-  fi
+  log_info "等待 Milvus 就绪..."
+  for i in $(seq 1 15); do
+    sleep 2
+    if curl -sf http://localhost:9091/healthz > /dev/null 2>&1; then
+      log_ok "Milvus 就绪 ✅"
+      break
+    fi
+    if [ $i -eq 15 ]; then
+      log_warn "Milvus 启动超时，继续启动其他服务（可稍后重试）"
+    fi
+  done
 fi
 
 # ── 2. 启动 FastAPI ───────────────────────────

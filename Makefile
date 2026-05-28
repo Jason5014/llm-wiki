@@ -77,25 +77,17 @@ setup-collector:
 # ─────────────────────────────────────────────
 
 milvus:
-	@if curl -sf http://localhost:9091/healthz > /dev/null 2>&1; then \
-		echo "✅ Milvus 已在运行：http://localhost:9091/healthz"; \
-	else \
-		echo ">>> 清理残留容器..."; \
-		for cname in milvus-standalone milvus-etcd milvus-minio; do \
-			docker ps -a --format '{{.Names}}' | grep -qx "$$cname" && docker rm -f "$$cname" 2>/dev/null || true; \
-		done; \
-		echo ">>> 启动 Milvus..."; \
-		docker compose up -d; \
-		echo ">>> 等待 Milvus 就绪（最多 30s）..."; \
-		for i in $$(seq 1 10); do \
-			sleep 3; \
-			if curl -sf http://localhost:9091/healthz > /dev/null 2>&1; then \
-				echo "✅ Milvus 已启动：http://localhost:9091/healthz"; \
-				break; \
-			fi; \
-			echo "  等待中... ($$i/10)"; \
-		done; \
-	fi
+	@echo ">>> 启动 Milvus（幂等，已运行则跳过）..."
+	docker compose up -d
+	@echo ">>> 等待 Milvus 就绪（最多 30s）..."
+	@for i in $$(seq 1 10); do \
+		sleep 3; \
+		if curl -sf http://localhost:9091/healthz > /dev/null 2>&1; then \
+			echo "✅ Milvus 已启动：http://localhost:9091/healthz"; \
+			break; \
+		fi; \
+		echo "  等待中... ($$i/10)"; \
+	done
 
 milvus-stop:
 	docker compose down
