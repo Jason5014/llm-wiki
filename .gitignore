@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.env
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# uv
+.uv/
+
+# 知识库数据（个人数据，不提交）
+knowledge_bases/
+
+# Docker 数据卷
+volumes/
+
+# Node
+node_modules/
+web/dist/
+web/.vite/
+collector/dist/
+collector/node_modules/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 开发日志（scripts/dev.sh 输出）
+.logs/
+
+# IDE
+.idea/
+.vscode/
+*.swp

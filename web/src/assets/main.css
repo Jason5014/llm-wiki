@@ -1,0 +1,86 @@
+:root {
+  /* Wiki 专用色 */
+  --wiki-entity: #409EFF;
+  --wiki-concept: #67C23A;
+  --wiki-source: #9C27B0;
+  --wiki-link: #409EFF;
+}
+
+/* 暗黑主题覆盖 */
+html.dark {
+  --el-bg-color: #1a1a1a;
+  --el-bg-color-page: #141414;
+  --el-bg-color-overlay: #252525;
+  --el-text-color-primary: #e8e8e8;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+/* WikiLink 渲染样式 */
+.wiki-link {
+  color: var(--wiki-link);
+  background: rgba(64, 158, 255, 0.1);
+  border-radius: 3px;
+  padding: 0 3px;
+  text-decoration: none;
+  cursor: pointer;
+}
+.wiki-link:hover {
+  background: rgba(64, 158, 255, 0.2);
+  text-decoration: underline;
+}
+
+/* Wiki 内容区 Markdown 样式 */
+.wiki-content {
+  line-height: 1.8;
+  font-size: 15px;
+}
+.wiki-content h1,
+.wiki-content h2,
+.wiki-content h3 {
+  margin-top: 1.5em;
+  font-weight: 600;
+}
+.wiki-content code {
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 13px;
+}
+.wiki-content pre code {
+  background: transparent;
+  padding: 0;
+}
+.wiki-content pre {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  border-radius: 8px;
+  padding: 16px;
+  overflow-x: auto;
+}
+.wiki-content blockquote {
+  border-left: 4px solid var(--el-border-color);
+  margin: 0;
+  padding: 8px 16px;
+  color: var(--el-text-color-secondary);
+  background: var(--el-fill-color-light);
+  border-radius: 0 4px 4px 0;
+}
+.wiki-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+}
+.wiki-content th,
+.wiki-content td {
+  border: 1px solid var(--el-border-color);
+  padding: 8px 12px;
+}
+.wiki-content th {
+  background: var(--el-fill-color);
+  font-weight: 600;
+}

@@ -1,0 +1,36 @@
+appId: com.llmwiki.collector
+productName: LLM Wiki Collector
+copyright: Copyright © 2026
+
+directories:
+  buildResources: build
+  output: dist
+
+files:
+  - out/**/*
+
+# macOS
+mac:
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+  icon: build/icon.icns
+  category: public.app-category.productivity
+
+# Windows
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.ico
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+
+# 发布配置（可选）
+publish: null
