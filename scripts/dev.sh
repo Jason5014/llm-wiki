@@ -77,16 +77,21 @@ open_new_terminal() {
 
 # ── 1. 启动 Milvus ────────────────────────────
 if [ -z "$SKIP_MILVUS" ]; then
-  # 先检测是否已在运行，避免容器名冲突
+  # 先检测是否已在运行，跳过避免重复启动
   if curl -sf http://localhost:9091/healthz > /dev/null 2>&1; then
     log_ok "Milvus 已在运行，跳过启动 ✅"
   else
     log_info "启动 Milvus..."
-    if ! docker compose up -d 2>&1; then
-      log_warn "docker compose up 失败（可能容器名冲突），尝试重建..."
-      docker compose down 2>/dev/null || true
-      docker compose up -d
-    fi
+
+    # 清理可能残留的同名容器（无论由哪个 compose 项目创建）
+    for cname in milvus-standalone milvus-etcd milvus-minio; do
+      if docker ps -a --format '{{.Names}}' | grep -qx "$cname"; then
+        log_warn "发现残留容器 $cname，强制删除..."
+        docker rm -f "$cname" 2>/dev/null || true
+      fi
+    done
+
+    docker compose up -d
 
     log_info "等待 Milvus 就绪..."
     for i in $(seq 1 15); do
