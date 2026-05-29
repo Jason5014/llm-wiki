@@ -4,7 +4,8 @@
 
 .PHONY: help setup setup-python setup-web setup-collector \
         dev api web collector milvus milvus-stop milvus-status \
-        restart \
+        restart restart-api restart-collector \
+        logs-api logs-web logs-collector \
         build build-web package-mac package-win \
         clean clean-wiki clean-index \
         check lint
@@ -39,6 +40,11 @@ help:
 	@echo "  make build-web       构建 Vue 前端（输出到 web/dist）"
 	@echo "  make package-mac     打包 Electron 应用（macOS .dmg）"
 	@echo "  make package-win     打包 Electron 应用（Windows .exe）"
+	@echo ""
+	@echo "  ── 日志（后台启动时用）──────────────────────"
+	@echo "  make logs-api        实时查看 FastAPI 日志（tail -f）"
+	@echo "  make logs-web        实时查看 Vue 日志"
+	@echo "  make logs-collector  实时查看 Electron 日志"
 	@echo ""
 	@echo "  ── 工具 ────────────────────────────────────"
 	@echo "  make check           检查各服务连接状态"
@@ -183,6 +189,25 @@ package-win:
 	@echo ">>> 打包 Electron（Windows）..."
 	cd collector && npm run package:win
 	@echo "✅ 安装包位于：collector/dist"
+
+# ─────────────────────────────────────────────
+# 日志查看
+# ─────────────────────────────────────────────
+
+logs-api:
+	@test -f .logs/FastAPI__8000.log \
+		&& tail -f .logs/FastAPI__8000.log \
+		|| echo "❌ 日志文件不存在，FastAPI 可能未通过后台模式启动"
+
+logs-web:
+	@test -f .logs/Vue__5173.log \
+		&& tail -f .logs/Vue__5173.log \
+		|| echo "❌ 日志文件不存在，Vue 可能未通过后台模式启动"
+
+logs-collector:
+	@test -f .logs/Electron_Collector.log \
+		&& tail -f .logs/Electron_Collector.log \
+		|| echo "❌ 日志文件不存在，Electron 可能未通过后台模式启动"
 
 # ─────────────────────────────────────────────
 # 健康检查
