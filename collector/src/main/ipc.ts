@@ -49,6 +49,7 @@ export function setupIpcHandlers(store: InstanceType<typeof Store<Record<string,
     return {
       apiBaseUrl: store.get('apiBaseUrl'),
       currentKbId: store.get('currentKbId'),
+      bookmarks: store.get('bookmarks'),
     }
   })
 

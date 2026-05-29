@@ -14,6 +14,13 @@ export const store = new Store({
     apiBaseUrl: 'http://localhost:8765',
     currentKbId: '',
     windowBounds: { width: 1400, height: 900 },
+    bookmarks: [
+      { name: '知乎', url: 'https://www.zhihu.com' },
+      { name: '小红书', url: 'https://www.xiaohongshu.com' },
+      { name: '微信公众号', url: 'https://mp.weixin.qq.com' },
+      { name: '少数派', url: 'https://sspai.com' },
+      { name: 'GitHub', url: 'https://github.com' },
+    ],
   },
 })
 
