@@ -56,6 +56,14 @@ export function setupIpcHandlers(store: InstanceType<typeof Store<Record<string,
     return resp.data
   })
 
+  ipcMain.handle('api:createKb', async (_, { kbId, name, domain, description }: {
+    kbId: string; name: string; domain?: string; description?: string
+  }) => {
+    const baseUrl = store.get('apiBaseUrl') as string
+    const resp = await axios.post(`${baseUrl}/api/kb/`, { kb_id: kbId, name, domain, description })
+    return resp.data
+  })
+
   ipcMain.handle('api:submitDoc', async (_, { kbId, doc }: { kbId: string; doc: ExtractResult }) => {
     const baseUrl = store.get('apiBaseUrl') as string
     const resp = await axios.post(`${baseUrl}/api/collect/${kbId}/raw`, doc)

@@ -19,7 +19,7 @@
         </div>
       </div>
 
-      <!-- 知识库选择 -->
+      <!-- 知识库选择 + 新建 -->
       <div class="kb-selector titlebar-no-drag">
         <el-select
           v-model="store.currentKbId"
@@ -35,7 +35,31 @@
             :value="kb.kb_id"
           />
         </el-select>
+        <el-button size="small" :icon="Plus" circle title="新建知识库" @click="showCreateKb = true" />
       </div>
+
+      <!-- 新建知识库弹框 -->
+      <el-dialog v-model="showCreateKb" title="新建知识库" width="400px" :close-on-click-modal="false">
+        <el-form :model="createKbForm" label-width="90px" label-position="left" @submit.prevent>
+          <el-form-item label="知识库 ID" required>
+            <el-input v-model="createKbForm.kbId" placeholder="ai-tech（字母/数字/连字符）" />
+            <div style="font-size:12px;color:var(--el-text-color-secondary);margin-top:4px">唯一标识，创建后不可修改</div>
+          </el-form-item>
+          <el-form-item label="名称" required>
+            <el-input v-model="createKbForm.name" placeholder="AI 技术知识库" />
+          </el-form-item>
+          <el-form-item label="领域">
+            <el-input v-model="createKbForm.domain" placeholder="AI/Tech（可选）" />
+          </el-form-item>
+          <el-form-item label="简介">
+            <el-input v-model="createKbForm.description" type="textarea" :rows="2" placeholder="可选" />
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="showCreateKb = false">取消</el-button>
+          <el-button type="primary" :loading="creatingKb" @click="confirmCreateKb">创建</el-button>
+        </template>
+      </el-dialog>
 
       <!-- 队列计数 -->
       <div class="queue-badge titlebar-no-drag">
@@ -69,6 +93,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
 import { useCollectorStore } from './stores/collector'
 
 const router = useRouter()
@@ -77,6 +103,29 @@ const store = useCollectorStore()
 
 const connected = ref(false)
 const isMac = navigator.platform.toLowerCase().includes('mac')
+
+// 新建知识库
+const showCreateKb = ref(false)
+const creatingKb = ref(false)
+const createKbForm = ref({ kbId: '', name: '', domain: '', description: '' })
+
+async function confirmCreateKb() {
+  if (!createKbForm.value.kbId || !createKbForm.value.name) {
+    ElMessage.warning('请填写知识库 ID 和名称')
+    return
+  }
+  creatingKb.value = true
+  try {
+    await store.createKb(createKbForm.value)
+    showCreateKb.value = false
+    createKbForm.value = { kbId: '', name: '', domain: '', description: '' }
+    ElMessage.success('知识库创建成功，已自动切换')
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || e?.message || '创建失败')
+  } finally {
+    creatingKb.value = false
+  }
+}
 
 const tabs = [
   { path: '/browser', label: '浏览采集', icon: 'Monitor' },
@@ -168,7 +217,13 @@ html, body, #app {
   font-weight: 500;
 }
 
-.kb-selector, .queue-badge {
+.kb-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.queue-badge {
   flex-shrink: 0;
 }
 

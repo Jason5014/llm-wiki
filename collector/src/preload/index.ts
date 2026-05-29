@@ -16,6 +16,7 @@ export interface CollectorAPI {
 
   // 知识库 API
   listKbs: () => Promise<unknown[]>
+  createKb: (params: { kbId: string; name: string; domain?: string; description?: string }) => Promise<unknown>
   submitDoc: (kbId: string, doc: unknown) => Promise<{ doc_id: string; saved: boolean }>
   batchSubmit: (kbId: string, docs: unknown[]) => Promise<{ saved: number; doc_ids: string[] }>
   uploadFile: (kbId: string, filePath: string) => Promise<{ doc_id: string; saved: boolean; title: string }>
@@ -45,6 +46,7 @@ const collectorAPI: CollectorAPI = {
   setSettings: (settings) => ipcRenderer.invoke('settings:set', settings),
 
   listKbs: () => ipcRenderer.invoke('api:listKbs'),
+  createKb: (params) => ipcRenderer.invoke('api:createKb', params),
   submitDoc: (kbId, doc) => ipcRenderer.invoke('api:submitDoc', { kbId, doc }),
   batchSubmit: (kbId, docs) => ipcRenderer.invoke('api:batchSubmit', { kbId, docs }),
   uploadFile: (kbId, filePath) => ipcRenderer.invoke('api:uploadFile', { kbId, filePath }),
