@@ -98,6 +98,23 @@
           <el-form-item label="来源 URL">
             <el-input v-model="previewData.url" disabled />
           </el-form-item>
+          <!-- 元数据展示 -->
+          <template v-if="previewData.metadata?.author || previewData.metadata?.date">
+            <el-form-item v-if="previewData.metadata?.author" label="作者">
+              <span>{{ previewData.metadata.author }}</span>
+              <span v-if="previewData.metadata?.authorBio" style="color: var(--el-text-color-secondary); margin-left: 8px;">{{ previewData.metadata.authorBio }}</span>
+            </el-form-item>
+            <el-form-item v-if="previewData.metadata?.date" label="发布时间">
+              <span>{{ previewData.metadata.date }}</span>
+            </el-form-item>
+            <el-form-item label="互动数据" v-if="previewData.metadata?.votes || previewData.metadata?.comments">
+              <el-tag v-if="previewData.metadata?.votes" size="small" style="margin-right: 8px;">赞同 {{ previewData.metadata.votes }}</el-tag>
+              <el-tag v-if="previewData.metadata?.comments" size="small" type="info">评论 {{ previewData.metadata.comments }}</el-tag>
+            </el-form-item>
+            <el-form-item v-if="previewData.metadata?.tags?.length" label="标签">
+              <el-tag v-for="tag in previewData.metadata.tags" :key="tag" size="small" style="margin-right: 4px;">{{ tag }}</el-tag>
+            </el-form-item>
+          </template>
           <el-form-item label="内容预览">
             <el-input
               v-model="previewData.contentPreview"
@@ -155,6 +172,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useCollectorStore } from '../stores/collector'
+import { extract } from '../extractors'
 
 const store = useCollectorStore()
 const webviewEl = ref<any>(null)
@@ -317,8 +335,8 @@ async function saveCurrentPage() {
 
   isSaving.value = true
   try {
-    // 通过 webview 执行 JS 提取内容
-    const result = await extractContentFromWebview()
+    const url = webviewEl.value.getURL()
+    const result = await extract(webviewEl.value, url)
     previewData.value = {
       title: result.title,
       url: result.url,
@@ -331,96 +349,6 @@ async function saveCurrentPage() {
     ElMessage.error(`提取内容失败：${e.message}`)
   } finally {
     isSaving.value = false
-  }
-}
-
-async function extractContentFromWebview(): Promise<{
-  title: string; url: string; content: string; metadata: Record<string, unknown>
-}> {
-  const url = webviewEl.value.getURL()
-  const hostname = new URL(url).hostname
-
-  let result: any
-
-  if (hostname.includes('xiaohongshu.com')) {
-    result = await webviewEl.value.executeJavaScript(`
-      (function() {
-        const title = document.querySelector('#detail-title')?.textContent?.trim()
-          || document.querySelector('.title')?.textContent?.trim()
-          || document.title;
-        const contentEl = document.querySelector('#detail-desc') || document.querySelector('.desc');
-        const content = contentEl?.textContent?.trim() || '';
-        const likes = document.querySelector('.like-wrapper .count')?.textContent?.trim() || '0';
-        const collects = document.querySelector('.collect-wrapper .count')?.textContent?.trim() || '0';
-        return { title, content, metadata: { likes, collects, source: 'xiaohongshu' } };
-      })()
-    `)
-  } else if (hostname.includes('zhihu.com')) {
-    result = await webviewEl.value.executeJavaScript(`
-      (function() {
-        // ── 优先检测是否有弹框 Modal 打开 ──────────────────────────
-        // 知乎首页点击文章卡片会出现 Modal 预览，需要从弹框内取内容和真实 URL
-        const modal = document.querySelector('.Modal--default, .Modal-content, [class*="ContentModal"]');
-        if (modal) {
-          // 弹框内的标题（文章 or 问答）
-          const modalTitle =
-            modal.querySelector('.Post-Title, .QuestionHeader-title, .ContentItem-title')?.textContent?.trim()
-            || modal.querySelector('h1, h2')?.textContent?.trim()
-            || document.title;
-          // 弹框内的正文
-          const modalContent =
-            Array.from(modal.querySelectorAll('.RichText.ztext, .Post-RichTextContainer'))
-              .map(e => e.textContent?.trim()).filter(Boolean).join('\\n\\n---\\n\\n')
-            || modal.innerText?.replace(/\\n{3,}/g, '\\n\\n').trim() || '';
-          // 尝试从弹框内找到文章的真实链接
-          const canonicalLink =
-            modal.querySelector('a[href*="/p/"], a[href*="/question/"]')?.href
-            || document.querySelector('link[rel="canonical"]')?.href
-            || location.href;
-          return {
-            title: modalTitle,
-            content: modalContent,
-            canonicalUrl: canonicalLink,
-            metadata: { source: 'zhihu', via: 'modal' }
-          };
-        }
-
-        // ── 普通页面（文章 / 问答）───────────────────────────────
-        const isArticle = location.pathname.startsWith('/p/');
-        const title = isArticle
-          ? document.querySelector('.Post-Title')?.textContent?.trim()
-          : document.querySelector('.QuestionHeader-title')?.textContent?.trim();
-        const content = isArticle
-          ? document.querySelector('.Post-RichTextContainer')?.textContent?.trim()
-          : Array.from(document.querySelectorAll('.RichText.ztext'))
-              .map(e => e.textContent?.trim()).join('\\n\\n---\\n\\n');
-        return {
-          title: title || document.title,
-          content: content || '',
-          canonicalUrl: null,
-          metadata: { source: 'zhihu' }
-        };
-      })()
-    `)
-  } else {
-    result = await webviewEl.value.executeJavaScript(`
-      (function() {
-        const mainEl = document.querySelector('main, article, [role="main"], .post-content, .article-content')
-          || document.body;
-        const text = mainEl?.innerText?.replace(/\\n{3,}/g, '\\n\\n').trim() || '';
-        return { title: document.title, content: text.substring(0, 10000), metadata: { source: 'web' } };
-      })()
-    `)
-  }
-
-  // 弹框场景：使用从 DOM 中提取的真实文章 URL，而非 webview 当前的页面 URL
-  const finalUrl = result.canonicalUrl || url
-
-  return {
-    title: result.title || finalUrl,
-    url: finalUrl,
-    content: result.content || '',
-    metadata: result.metadata || {},
   }
 }
 
