@@ -25,6 +25,7 @@ node_modules/
 web/dist/
 web/.vite/
 collector/dist/
+collector/out/
 collector/node_modules/
 
 # 系统文件
