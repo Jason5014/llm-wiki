@@ -1,6 +1,7 @@
 """
 知识库管理 API — /api/kb
 """
+import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
@@ -44,12 +45,15 @@ def list_kbs() -> list[KBDetail]:
 
 @router.post("/", summary="创建知识库", status_code=201)
 def create_kb(req: CreateKBRequest) -> KBDetail:
+    # 未指定 kb_id 时自动生成：kb-{8位uuid}
+    kb_id = req.kb_id or f"kb-{uuid.uuid4().hex[:8]}"
+
     # 检查是否已存在
-    if load_kb_config(req.kb_id):
-        raise HTTPException(status_code=409, detail=f"知识库 '{req.kb_id}' 已存在")
+    if load_kb_config(kb_id):
+        raise HTTPException(status_code=409, detail=f"知识库 '{kb_id}' 已存在")
 
     config = KBConfig(
-        kb_id=req.kb_id,
+        kb_id=kb_id,
         name=req.name,
         description=req.description,
         domain=req.domain,

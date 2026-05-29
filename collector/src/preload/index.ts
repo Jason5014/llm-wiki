@@ -16,7 +16,7 @@ export interface CollectorAPI {
 
   // 知识库 API
   listKbs: () => Promise<unknown[]>
-  createKb: (params: { kbId: string; name: string; domain?: string; description?: string }) => Promise<unknown>
+  createKb: (params: { name: string; domain?: string; description?: string }) => Promise<unknown>
   submitDoc: (kbId: string, doc: unknown) => Promise<{ doc_id: string; saved: boolean }>
   batchSubmit: (kbId: string, docs: unknown[]) => Promise<{ saved: number; doc_ids: string[] }>
   uploadFile: (kbId: string, filePath: string) => Promise<{ doc_id: string; saved: boolean; title: string }>

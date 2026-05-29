@@ -224,7 +224,9 @@ class TaskState(BaseModel):
 # ─────────────────────────────────────────────
 
 class CreateKBRequest(BaseModel):
-    kb_id: str = Field(..., pattern=r"^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$")
+    # kb_id 可选，不填则由后端自动生成（推荐）
+    # 若手动指定须符合 ^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$ 格式
+    kb_id: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$")
     name: str
     description: str = ""
     domain: str = ""

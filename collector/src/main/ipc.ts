@@ -56,11 +56,12 @@ export function setupIpcHandlers(store: InstanceType<typeof Store<Record<string,
     return resp.data
   })
 
-  ipcMain.handle('api:createKb', async (_, { kbId, name, domain, description }: {
-    kbId: string; name: string; domain?: string; description?: string
+  ipcMain.handle('api:createKb', async (_, { name, domain, description }: {
+    name: string; domain?: string; description?: string
   }) => {
     const baseUrl = store.get('apiBaseUrl') as string
-    const resp = await axios.post(`${baseUrl}/api/kb/`, { kb_id: kbId, name, domain, description })
+    // 不传 kb_id，由后端自动生成 kb-{8位uuid}
+    const resp = await axios.post(`${baseUrl}/api/kb/`, { name, domain, description })
     return resp.data
   })
 

@@ -75,7 +75,7 @@ export const useCollectorStore = defineStore('collector', () => {
     }
   }
 
-  async function createKb(params: { kbId: string; name: string; domain?: string; description?: string }): Promise<KBInfo> {
+  async function createKb(params: { name: string; domain?: string; description?: string }): Promise<KBInfo> {
     const kb = await window.collector.createKb(params) as KBInfo
     await loadKbList()           // 刷新列表
     currentKbId.value = kb.kb_id // 自动切换到新建的 KB

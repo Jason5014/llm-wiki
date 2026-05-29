@@ -40,11 +40,7 @@
 
       <!-- 新建知识库弹框 -->
       <el-dialog v-model="showCreateKb" title="新建知识库" width="400px" :close-on-click-modal="false">
-        <el-form :model="createKbForm" label-width="90px" label-position="left" @submit.prevent>
-          <el-form-item label="知识库 ID" required>
-            <el-input v-model="createKbForm.kbId" placeholder="ai-tech（字母/数字/连字符）" />
-            <div style="font-size:12px;color:var(--el-text-color-secondary);margin-top:4px">唯一标识，创建后不可修改</div>
-          </el-form-item>
+        <el-form :model="createKbForm" label-width="80px" label-position="left" @submit.prevent>
           <el-form-item label="名称" required>
             <el-input v-model="createKbForm.name" placeholder="AI 技术知识库" />
           </el-form-item>
@@ -107,18 +103,18 @@ const isMac = navigator.platform.toLowerCase().includes('mac')
 // 新建知识库
 const showCreateKb = ref(false)
 const creatingKb = ref(false)
-const createKbForm = ref({ kbId: '', name: '', domain: '', description: '' })
+const createKbForm = ref({ name: '', domain: '', description: '' })
 
 async function confirmCreateKb() {
-  if (!createKbForm.value.kbId || !createKbForm.value.name) {
-    ElMessage.warning('请填写知识库 ID 和名称')
+  if (!createKbForm.value.name.trim()) {
+    ElMessage.warning('请填写知识库名称')
     return
   }
   creatingKb.value = true
   try {
     await store.createKb(createKbForm.value)
     showCreateKb.value = false
-    createKbForm.value = { kbId: '', name: '', domain: '', description: '' }
+    createKbForm.value = { name: '', domain: '', description: '' }
     ElMessage.success('知识库创建成功，已自动切换')
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail || e?.message || '创建失败')
