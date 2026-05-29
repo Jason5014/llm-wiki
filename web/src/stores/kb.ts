@@ -45,7 +45,7 @@ export const useKbStore = defineStore('kb', () => {
   }
 
   async function createKb(data: {
-    kb_id: string; name: string; description?: string; domain?: string
+    name: string; description?: string; domain?: string[]
   }) {
     const resp = await kbApi.create(data)
     kbList.value.push(resp.data)

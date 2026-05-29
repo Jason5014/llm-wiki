@@ -65,11 +65,7 @@
     <!-- 创建对话框 -->
     <el-dialog v-model="showCreate" title="创建知识库" width="480px">
       <el-form :model="createForm" label-width="100px" label-position="left">
-        <el-form-item label="知识库 ID" required>
-          <el-input v-model="createForm.kb_id" placeholder="ai-tech（字母/数字/连字符）" />
-          <div class="form-tip">唯一标识，创建后不可修改</div>
-        </el-form-item>
-        <el-form-item label="显示名称" required>
+        <el-form-item label="名称" required>
           <el-input v-model="createForm.name" placeholder="AI 技术知识库" />
         </el-form-item>
         <el-form-item label="领域标签">
@@ -108,8 +104,8 @@ const kbStore = useKbStore()
 
 const showCreate = ref(false)
 const creating = ref(false)
-const createForm = ref<{ kb_id: string; name: string; domain: string[]; description: string }>({
-  kb_id: '', name: '', domain: [], description: '',
+const createForm = ref<{ name: string; domain: string[]; description: string }>({
+  name: '', domain: [], description: '',
 })
 
 const domainPresets = [
@@ -137,16 +133,16 @@ async function deleteKb(kbId: string) {
 }
 
 async function confirmCreate() {
-  if (!createForm.value.kb_id || !createForm.value.name) {
-    ElMessage.warning('请填写知识库 ID 和名称')
+  if (!createForm.value.name.trim()) {
+    ElMessage.warning('请填写知识库名称')
     return
   }
   creating.value = true
   try {
     const kb = await kbStore.createKb(createForm.value)
     showCreate.value = false
-    createForm.value = { kb_id: '', name: '', domain: [], description: '' }
-    ElMessage.success(`知识库 "${kb.name}" 创建成功`)
+    createForm.value = { name: '', domain: [], description: '' }
+    ElMessage.success(`知识库「${kb.name}」创建成功`)
   } catch (e: any) {
     ElMessage.error(e.response?.data?.detail || '创建失败')
   } finally {
