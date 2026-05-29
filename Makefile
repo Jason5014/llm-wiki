@@ -24,7 +24,9 @@ help:
 	@echo "  make setup-collector 仅安装 Electron 采集器依赖"
 	@echo ""
 	@echo "  ── 开发启动 ────────────────────────────────"
-	@echo "  make restart         停止所有服务后重新启动"
+	@echo "  make restart         停止所有服务后重新启动（全量）"
+	@echo "  make restart-api     仅重启 FastAPI（改 .env 时用；改 .py 无需重启）"
+	@echo "  make restart-collector 仅重启 Electron（改 main/preload 时用；改 renderer 无需重启）"
 	@echo "  make milvus          启动 Milvus 向量数据库（Docker）"
 	@echo "  make milvus-stop     停止 Milvus"
 	@echo "  make milvus-status   查看 Milvus 健康状态"
@@ -103,6 +105,25 @@ restart:
 	./scripts/stop.sh
 	@sleep 1
 	./scripts/dev.sh
+
+# 仅重启 FastAPI（改了 .env 或依赖时用；改 Python 代码无需重启，--reload 自动处理）
+restart-api:
+	@echo ">>> 重启 FastAPI..."
+	@pkill -f "uvicorn api.main:app" 2>/dev/null && echo "  已停止旧进程" || echo "  FastAPI 未在运行"
+	@sleep 0.5
+	@echo "  启动中... (运行 make api 可查看日志)"
+	@nohup uv run uvicorn api.main:app --reload --host 0.0.0.0 --port 8000 \
+		> .logs/FastAPI_8000.log 2>&1 &
+	@echo "✅ FastAPI 已重启 → http://localhost:8000  日志: .logs/FastAPI_8000.log"
+
+# 仅重启 Electron（改了 main/ 或 preload/ 时用；改 renderer/ Vue 代码无需重启，HMR 自动热更）
+restart-collector:
+	@echo ">>> 重启 Electron 采集器..."
+	@pkill -f "electron.*collector" 2>/dev/null || pkill -f "electron-vite.*collector" 2>/dev/null || true
+	@sleep 0.5
+	@mkdir -p .logs
+	@nohup bash -c "cd collector && npm run dev" > .logs/Electron_Collector.log 2>&1 &
+	@echo "✅ Electron 已重启  日志: .logs/Electron_Collector.log"
 
 # ─────────────────────────────────────────────
 # 后端 API
