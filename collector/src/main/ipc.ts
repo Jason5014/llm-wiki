@@ -19,11 +19,22 @@ interface ExtractResult {
   metadata: Record<string, unknown>
 }
 
-interface CollectItem {
-  url: string
-  status: 'pending' | 'processing' | 'done' | 'error'
-  result?: ExtractResult
-  error?: string
+// ─────────────────────────────────────────────
+// 工具：将 axios 错误转成可跨 IPC 传递的普通 Error
+// axios 错误对象含循环引用（config/request/response），
+// 直接抛出会触发 Electron DataCloneError "An object could not be cloned"
+// ─────────────────────────────────────────────
+
+function ipcError(e: unknown): Error {
+  if (axios.isAxiosError(e)) {
+    const detail = e.response?.data?.detail
+    if (typeof detail === 'string') return new Error(detail)
+    if (Array.isArray(detail)) return new Error(detail.map((d: any) => d.msg).join('; '))
+    if (e.response) return new Error(`HTTP ${e.response.status}: ${e.response.statusText}`)
+    if (e.request) return new Error('后端无响应，请确认服务已启动')
+  }
+  if (e instanceof Error) return new Error(e.message)
+  return new Error(String(e))
 }
 
 // ─────────────────────────────────────────────
@@ -51,41 +62,50 @@ export function setupIpcHandlers(store: InstanceType<typeof Store<Record<string,
   // ── 知识库 API ────────────────────────────
 
   ipcMain.handle('api:listKbs', async () => {
-    const baseUrl = store.get('apiBaseUrl') as string
-    const resp = await axios.get(`${baseUrl}/api/kb/`)
-    return resp.data
+    try {
+      const baseUrl = store.get('apiBaseUrl') as string
+      const resp = await axios.get(`${baseUrl}/api/kb/`)
+      return resp.data
+    } catch (e) { throw ipcError(e) }
   })
 
   ipcMain.handle('api:createKb', async (_, { name, domain, description }: {
     name: string; domain?: string[]; description?: string
   }) => {
-    const baseUrl = store.get('apiBaseUrl') as string
-    // 不传 kb_id，由后端自动生成 kb-{8位uuid}
-    const resp = await axios.post(`${baseUrl}/api/kb/`, { name, domain, description })
-    return resp.data
+    try {
+      const baseUrl = store.get('apiBaseUrl') as string
+      const resp = await axios.post(`${baseUrl}/api/kb/`, { name, domain, description })
+      return resp.data
+    } catch (e) { throw ipcError(e) }
   })
 
   ipcMain.handle('api:submitDoc', async (_, { kbId, doc }: { kbId: string; doc: ExtractResult }) => {
-    const baseUrl = store.get('apiBaseUrl') as string
-    const resp = await axios.post(`${baseUrl}/api/collect/${kbId}/raw`, doc)
-    return resp.data
+    try {
+      const baseUrl = store.get('apiBaseUrl') as string
+      const resp = await axios.post(`${baseUrl}/api/collect/${kbId}/raw`, doc)
+      return resp.data
+    } catch (e) { throw ipcError(e) }
   })
 
   ipcMain.handle('api:batchSubmit', async (_, { kbId, docs }: { kbId: string; docs: ExtractResult[] }) => {
-    const baseUrl = store.get('apiBaseUrl') as string
-    const resp = await axios.post(`${baseUrl}/api/collect/${kbId}/batch`, { documents: docs })
-    return resp.data
+    try {
+      const baseUrl = store.get('apiBaseUrl') as string
+      const resp = await axios.post(`${baseUrl}/api/collect/${kbId}/batch`, { documents: docs })
+      return resp.data
+    } catch (e) { throw ipcError(e) }
   })
 
   ipcMain.handle('api:uploadFile', async (_, { kbId, filePath }: { kbId: string; filePath: string }) => {
-    const baseUrl = store.get('apiBaseUrl') as string
-    const FormData = (await import('form-data')).default
-    const form = new FormData()
-    form.append('file', fs.createReadStream(filePath), path.basename(filePath))
-    const resp = await axios.post(`${baseUrl}/api/collect/${kbId}/upload`, form, {
-      headers: form.getHeaders(),
-    })
-    return resp.data
+    try {
+      const baseUrl = store.get('apiBaseUrl') as string
+      const FormData = (await import('form-data')).default
+      const form = new FormData()
+      form.append('file', fs.createReadStream(filePath), path.basename(filePath))
+      const resp = await axios.post(`${baseUrl}/api/collect/${kbId}/upload`, form, {
+        headers: form.getHeaders(),
+      })
+      return resp.data
+    } catch (e) { throw ipcError(e) }
   })
 
   // ── 内嵌浏览器内容提取 ───────────────────
