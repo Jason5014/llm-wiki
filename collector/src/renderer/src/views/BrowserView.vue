@@ -65,13 +65,13 @@
         class="browser-webview"
         :src="currentUrl"
         partition="persist:wiki-collector"
+        allowpopups
         webpreferences="contextIsolation=false"
         @did-start-loading="isLoading = true"
         @did-stop-loading="onStopLoading"
         @did-navigate="onNavigate"
         @did-navigate-in-page="onNavigate"
         @page-title-updated="onTitleUpdated"
-        @new-window="onNewWindow"
       />
     </div>
 
@@ -111,7 +111,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useCollectorStore } from '../stores/collector'
 
@@ -178,21 +178,8 @@ function onNavigate(event: any) {
   addressInput.value = event.url || ''
 }
 
-function onTitleUpdated(event: any) {
+function onTitleUpdated(_event: any) {
   // 可用于 UI 显示当前页标题
-}
-
-/**
- * 拦截 webview 内的新窗口请求（target="_blank" 链接、window.open）
- * 默认行为是 Electron 新开一个 BrowserWindow 弹框，体验差且无法采集
- * 改为在当前 webview 内直接导航
- */
-function onNewWindow(event: any) {
-  const url: string = event.url || event.detail?.url
-  if (!url || !url.startsWith('http')) return
-  // 在当前 webview 内加载，地址栏同步更新
-  webviewEl.value?.loadURL(url)
-  addressInput.value = url
 }
 
 async function saveCurrentPage() {
@@ -334,14 +321,25 @@ async function confirmSave() {
   }
 }
 
+// 主进程通过 setWindowOpenHandler 拦截 target="_blank" 后，
+// 发送此 IPC 通知渲染层同步地址栏
+function onWebviewNavigated(_: unknown, url: string) {
+  addressInput.value = url
+}
+
 onMounted(() => {
-  // webview ready 事件
   if (webviewEl.value) {
     webviewEl.value.addEventListener?.('dom-ready', () => {
       canGoBack.value = webviewEl.value?.canGoBack() ?? false
       canGoForward.value = webviewEl.value?.canGoForward() ?? false
     })
   }
+  // 监听主进程的导航通知（new-window 被拦截并在 webview 内导航后触发）
+  window.electron?.ipcRenderer.on('webview:navigated', onWebviewNavigated)
+})
+
+onUnmounted(() => {
+  window.electron?.ipcRenderer.removeListener('webview:navigated', onWebviewNavigated)
 })
 </script>
 

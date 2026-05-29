@@ -2,7 +2,7 @@
  * Electron 主进程入口
  * 负责：窗口创建、菜单、IPC 分发、应用生命周期
  */
-import { app, BrowserWindow, shell, ipcMain, session, Menu } from 'electron'
+import { app, BrowserWindow, shell, session, Menu } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import Store from 'electron-store'
@@ -126,7 +126,7 @@ app.whenReady().then(() => {
 
   createMenu()
   createWindow()
-  setupIpcHandlers(store)
+  setupIpcHandlers(store as any)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -139,6 +139,25 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+/**
+ * 拦截 webview 内所有新窗口请求（target="_blank"、window.open）
+ * Electron 28+ 废弃了 webview 的 new-window DOM 事件，
+ * 必须在主进程通过 web-contents-created 拦截 webview 的 webContents。
+ *
+ * 策略：让 webview 在原窗口内导航到目标 URL，通知渲染进程同步地址栏。
+ */
+app.on('web-contents-created', (_, contents) => {
+  if (contents.getType() !== 'webview') return
+
+  contents.setWindowOpenHandler(({ url }) => {
+    // 在 webview 内部导航，不开新窗口
+    contents.loadURL(url)
+    // 通知渲染进程同步地址栏显示
+    mainWindow?.webContents.send('webview:navigated', url)
+    return { action: 'deny' }
+  })
 })
 
 /**

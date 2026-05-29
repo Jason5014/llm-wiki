@@ -30,7 +30,7 @@ interface CollectItem {
 // 注册所有 IPC 处理器
 // ─────────────────────────────────────────────
 
-export function setupIpcHandlers(store: InstanceType<typeof Store>): void {
+export function setupIpcHandlers(store: InstanceType<typeof Store<Record<string, unknown>>>): void {
 
   // ── 设置 ──────────────────────────────────
 
