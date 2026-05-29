@@ -31,7 +31,7 @@ help:
 	@echo "  make milvus          启动 Milvus 向量数据库（Docker）"
 	@echo "  make milvus-stop     停止 Milvus"
 	@echo "  make milvus-status   查看 Milvus 健康状态"
-	@echo "  make api             启动 FastAPI 后端（端口 8000，热重载）"
+	@echo "  make api             启动 FastAPI 后端（端口 8765，热重载）"
 	@echo "  make web             启动 Vue 前端（端口 5173，热重载）"
 	@echo "  make collector       启动 Electron 采集应用（开发模式）"
 	@echo "  make mcp             启动 MCP 服务器（stdio 模式）"
@@ -118,9 +118,9 @@ restart-api:
 	@pkill -f "uvicorn api.main:app" 2>/dev/null && echo "  已停止旧进程" || echo "  FastAPI 未在运行"
 	@sleep 0.5
 	@echo "  启动中... (运行 make api 可查看日志)"
-	@nohup uv run uvicorn api.main:app --reload --host 0.0.0.0 --port 8000 \
-		> .logs/FastAPI_8000.log 2>&1 &
-	@echo "✅ FastAPI 已重启 → http://localhost:8000  日志: .logs/FastAPI_8000.log"
+	@nohup uv run uvicorn api.main:app --reload --host 0.0.0.0 --port 8765 \
+		> .logs/FastAPI_8765.log 2>&1 &
+	@echo "✅ FastAPI 已重启 → http://localhost:8765  日志: .logs/FastAPI_8765.log"
 
 # 仅重启 Electron（改了 main/ 或 preload/ 时用；改 renderer/ Vue 代码无需重启，HMR 自动热更）
 restart-collector:
@@ -140,9 +140,9 @@ api:
 		echo "⚠️  未找到 .env 文件，请先执行: cp .env.example .env"; \
 		exit 1; \
 	fi
-	@echo ">>> 启动 FastAPI 后端 → http://localhost:8000"
-	@echo "    API 文档 → http://localhost:8000/docs"
-	uv run uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+	@echo ">>> 启动 FastAPI 后端 → http://localhost:8765"
+	@echo "    API 文档 → http://localhost:8765/docs"
+	uv run uvicorn api.main:app --reload --host 0.0.0.0 --port 8765
 
 # ─────────────────────────────────────────────
 # Web 前端
@@ -195,8 +195,8 @@ package-win:
 # ─────────────────────────────────────────────
 
 logs-api:
-	@test -f .logs/FastAPI__8000.log \
-		&& tail -f .logs/FastAPI__8000.log \
+	@test -f .logs/FastAPI__8765.log \
+		&& tail -f .logs/FastAPI__8765.log \
 		|| echo "❌ 日志文件不存在，FastAPI 可能未通过后台模式启动"
 
 logs-web:
@@ -219,8 +219,8 @@ check:
 	@echo ""
 	@printf "Milvus (9091):  "; \
 		curl -sf http://localhost:9091/healthz > /dev/null && echo "✅ 运行中" || echo "❌ 未启动"
-	@printf "FastAPI (8000): "; \
-		curl -sf http://localhost:8000/health > /dev/null && echo "✅ 运行中" || echo "❌ 未启动"
+	@printf "FastAPI (8765): "; \
+		curl -sf http://localhost:8765/health > /dev/null && echo "✅ 运行中" || echo "❌ 未启动"
 	@printf "Vue Dev (5173): "; \
 		curl -sf http://localhost:5173 > /dev/null && echo "✅ 运行中" || echo "❌ 未启动"
 	@echo ""

@@ -41,7 +41,7 @@ export const useCollectorStore = defineStore('collector', () => {
   const doneCount = computed(() => queue.value.filter(i => i.status === 'done').length)
 
   // 设置
-  const apiBaseUrl = ref('http://localhost:8000')
+  const apiBaseUrl = ref('http://localhost:8765')
 
   // 浏览器当前 URL
   const browserUrl = ref('https://www.google.com')

@@ -4,7 +4,7 @@
 #
 # 自动在多个 Terminal/iTerm2 窗口启动：
 #   1. Milvus（Docker）
-#   2. FastAPI 后端（:8000）
+#   2. FastAPI 后端（:8765）
 #   3. Vue 前端（:5173）
 #   4. Electron 采集器（可选，默认启动）
 
@@ -97,8 +97,8 @@ fi
 
 # ── 2. 启动 FastAPI ───────────────────────────
 log_info "启动 FastAPI 后端..."
-open_new_terminal "FastAPI :8000" \
-  "uv run uvicorn api.main:app --reload --host 0.0.0.0 --port 8000"
+open_new_terminal "FastAPI :8765" \
+  "uv run uvicorn api.main:app --reload --host 0.0.0.0 --port 8765"
 
 sleep 1
 
@@ -124,7 +124,7 @@ fi
 echo ""
 log_ok "开发环境启动完成 🚀"
 echo ""
-echo "  FastAPI 文档  → http://localhost:8000/docs"
+echo "  FastAPI 文档  → http://localhost:8765/docs"
 echo "  Vue 前端      → http://localhost:5173"
 echo "  Milvus 健康   → http://localhost:9091/healthz"
 echo ""

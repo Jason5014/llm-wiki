@@ -7,12 +7,12 @@
         <template #header>后端连接</template>
         <el-form label-width="140px" label-position="left">
           <el-form-item label="API 地址">
-            <el-input v-model="store.apiBaseUrl" placeholder="http://localhost:8000">
+            <el-input v-model="store.apiBaseUrl" placeholder="http://localhost:8765">
               <template #append>
                 <el-button @click="testConnection" :loading="testing">测试连接</el-button>
               </template>
             </el-input>
-            <div class="form-tip">FastAPI 后端的地址，默认 http://localhost:8000</div>
+            <div class="form-tip">FastAPI 后端的地址，默认 http://localhost:8765</div>
           </el-form-item>
           <el-form-item>
             <el-button type="primary" @click="saveSettings">保存设置</el-button>

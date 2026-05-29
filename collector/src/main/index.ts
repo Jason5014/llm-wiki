@@ -11,7 +11,7 @@ import { setupIpcHandlers } from './ipc'
 // 持久化配置存储
 export const store = new Store({
   defaults: {
-    apiBaseUrl: 'http://localhost:8000',
+    apiBaseUrl: 'http://localhost:8765',
     currentKbId: '',
     windowBounds: { width: 1400, height: 900 },
   },

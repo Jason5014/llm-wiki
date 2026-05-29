@@ -27,7 +27,7 @@ class Settings(BaseSettings):
 
     # ===== API =====
     api_host: str = "0.0.0.0"
-    api_port: int = 8000
+    api_port: int = 8765
 
     # ===== 存储 =====
     kb_base_dir: Path = Path("./knowledge_bases")
