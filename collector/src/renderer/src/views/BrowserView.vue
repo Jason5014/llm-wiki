@@ -65,13 +65,13 @@
         class="browser-webview"
         :src="currentUrl"
         partition="persist:wiki-collector"
-        allowpopups
         webpreferences="contextIsolation=false"
         @did-start-loading="isLoading = true"
         @did-stop-loading="onStopLoading"
         @did-navigate="onNavigate"
         @did-navigate-in-page="onNavigate"
         @page-title-updated="onTitleUpdated"
+        @new-window="onNewWindow"
       />
     </div>
 
@@ -180,6 +180,19 @@ function onNavigate(event: any) {
 
 function onTitleUpdated(event: any) {
   // 可用于 UI 显示当前页标题
+}
+
+/**
+ * 拦截 webview 内的新窗口请求（target="_blank" 链接、window.open）
+ * 默认行为是 Electron 新开一个 BrowserWindow 弹框，体验差且无法采集
+ * 改为在当前 webview 内直接导航
+ */
+function onNewWindow(event: any) {
+  const url: string = event.url || event.detail?.url
+  if (!url || !url.startsWith('http')) return
+  // 在当前 webview 内加载，地址栏同步更新
+  webviewEl.value?.loadURL(url)
+  addressInput.value = url
 }
 
 async function saveCurrentPage() {
