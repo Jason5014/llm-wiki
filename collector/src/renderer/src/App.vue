@@ -35,6 +35,7 @@
             :value="kb.kb_id"
           />
         </el-select>
+        <el-button size="small" :icon="Refresh" circle title="刷新知识库列表" :loading="refreshing" @click="refreshKbList" />
         <el-button size="small" :icon="Plus" circle title="新建知识库" @click="showCreateKb = true" />
       </div>
 
@@ -100,7 +101,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, Refresh } from '@element-plus/icons-vue'
 import { useCollectorStore } from './stores/collector'
 
 const router = useRouter()
@@ -109,6 +110,17 @@ const store = useCollectorStore()
 
 const connected = ref(false)
 const isMac = navigator.platform.toLowerCase().includes('mac')
+
+// 刷新知识库列表
+const refreshing = ref(false)
+async function refreshKbList() {
+  refreshing.value = true
+  try {
+    await store.loadKbList()
+  } finally {
+    refreshing.value = false
+  }
+}
 
 // 新建知识库
 const showCreateKb = ref(false)
