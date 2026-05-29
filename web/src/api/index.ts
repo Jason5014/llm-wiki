@@ -16,7 +16,7 @@ export const kbApi = {
   list: () => api.get('/kb/'),
   get: (kbId: string) => api.get(`/kb/${kbId}`),
   create: (data: {
-    kb_id: string; name: string; description?: string; domain?: string
+    name: string; description?: string; domain?: string[]
   }) => api.post('/kb/', data),
   delete: (kbId: string) => api.delete(`/kb/${kbId}`),
 }

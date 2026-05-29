@@ -4,6 +4,7 @@
 
 .PHONY: help setup setup-python setup-web setup-collector \
         dev api web collector milvus milvus-stop milvus-status \
+        restart \
         build build-web package-mac package-win \
         clean clean-wiki clean-index \
         check lint
@@ -23,6 +24,7 @@ help:
 	@echo "  make setup-collector 仅安装 Electron 采集器依赖"
 	@echo ""
 	@echo "  ── 开发启动 ────────────────────────────────"
+	@echo "  make restart         停止所有服务后重新启动"
 	@echo "  make milvus          启动 Milvus 向量数据库（Docker）"
 	@echo "  make milvus-stop     停止 Milvus"
 	@echo "  make milvus-status   查看 Milvus 健康状态"
@@ -95,6 +97,12 @@ milvus-stop:
 
 milvus-status:
 	@curl -sf http://localhost:9091/healthz && echo "✅ Milvus 运行正常" || echo "❌ Milvus 未响应"
+
+restart:
+	@echo ">>> 重启所有开发服务..."
+	./scripts/stop.sh
+	@sleep 1
+	./scripts/dev.sh
 
 # ─────────────────────────────────────────────
 # 后端 API
