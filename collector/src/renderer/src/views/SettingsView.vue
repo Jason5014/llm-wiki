@@ -67,7 +67,7 @@ import { useCollectorStore } from '../stores/collector'
 const store = useCollectorStore()
 const testing = ref(false)
 const cookies = ref<any[]>([])
-const electronVersion = ref(process.versions?.electron || 'N/A')
+const electronVersion = ref('N/A')
 
 const cookieSummary = computed(() => {
   const map: Record<string, number> = {}
@@ -131,7 +131,7 @@ onMounted(() => {
 
 <style scoped>
 .settings-view {
-  height: 100%;
+  flex: 1;
   overflow-y: auto;
   padding: 24px;
 }

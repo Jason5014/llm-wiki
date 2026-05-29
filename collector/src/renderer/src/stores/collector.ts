@@ -2,7 +2,7 @@
  * 采集器全局状态
  */
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, toRaw } from 'vue'
 
 export interface QueueItem {
   id: string
@@ -30,6 +30,9 @@ export interface KBInfo {
   }
 }
 
+// 是否运行在 Electron 环境中
+const isElectron = !!(window as any).collector
+
 export const useCollectorStore = defineStore('collector', () => {
   // 当前知识库
   const currentKbId = ref<string>('')
@@ -46,26 +49,31 @@ export const useCollectorStore = defineStore('collector', () => {
   // 浏览器当前 URL
   const browserUrl = ref('https://www.google.com')
 
+  const collector = (window as any).collector
+
   // ─────────────────────────────────────────
   // Actions
   // ─────────────────────────────────────────
 
   async function loadSettings() {
-    const settings = await window.collector.getSettings()
+    if (!isElectron) return
+    const settings = await collector.getSettings()
     apiBaseUrl.value = settings.apiBaseUrl
     currentKbId.value = settings.currentKbId
   }
 
   async function saveSettings() {
-    await window.collector.setSettings({
+    if (!isElectron) return
+    await collector.setSettings({
       apiBaseUrl: apiBaseUrl.value,
       currentKbId: currentKbId.value,
     })
   }
 
   async function loadKbList() {
+    if (!isElectron) return
     try {
-      const list = await window.collector.listKbs()
+      const list = await collector.listKbs()
       kbList.value = list as KBInfo[]
       if (!currentKbId.value && list.length > 0) {
         currentKbId.value = (list[0] as KBInfo).kb_id
@@ -76,7 +84,8 @@ export const useCollectorStore = defineStore('collector', () => {
   }
 
   async function createKb(params: { name: string; domain?: string[]; description?: string }): Promise<KBInfo> {
-    const kb = await window.collector.createKb(params) as KBInfo
+    if (!isElectron) throw new Error('请在 Electron 应用中操作')
+    const kb = await collector.createKb(toRaw(params)) as KBInfo
     await loadKbList()           // 刷新列表
     currentKbId.value = kb.kb_id // 自动切换到新建的 KB
     await saveSettings()
@@ -107,14 +116,15 @@ export const useCollectorStore = defineStore('collector', () => {
     url: string
     metadata: Record<string, unknown>
   }): Promise<string> {
+    if (!isElectron) throw new Error('请在 Electron 应用中操作')
     if (!currentKbId.value) throw new Error('请先选择知识库')
-    const result = await window.collector.submitDoc(currentKbId.value, extractResult)
+    const result = await collector.submitDoc(currentKbId.value, toRaw(extractResult))
     return result.doc_id
   }
 
   async function batchSave(): Promise<void> {
     const pendingItems = queue.value.filter(i => i.status === 'done' && !i.docId)
-    if (!pendingItems.length || !currentKbId.value) return
+    if (!isElectron || !pendingItems.length || !currentKbId.value) return
 
     const docs = pendingItems.map(item => ({
       title: item.title || item.url,
@@ -123,7 +133,7 @@ export const useCollectorStore = defineStore('collector', () => {
       metadata: item.metadata || {},
     }))
 
-    const result = await window.collector.batchSubmit(currentKbId.value, docs)
+    const result = await collector.batchSubmit(currentKbId.value, toRaw(docs))
 
     result.doc_ids.forEach((docId: string, i: number) => {
       updateQueueItem(pendingItems[i].id, { docId })

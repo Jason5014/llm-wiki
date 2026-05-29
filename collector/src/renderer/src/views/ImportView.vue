@@ -171,7 +171,7 @@ function formatSize(bytes: number): string {
 
 <style scoped>
 .import-view {
-  height: 100%;
+  flex: 1;
   overflow-y: auto;
   padding: 24px;
 }

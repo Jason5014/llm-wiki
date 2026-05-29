@@ -63,7 +63,7 @@ def create_kb(req: CreateKBRequest) -> KBDetail:
         updated_at=datetime.now(),
         status=KBStatus.ready,
     )
-    init_kb_dirs(req.kb_id)
+    init_kb_dirs(kb_id)
     save_kb_config(config)
     return _kb_to_detail(config)
 
