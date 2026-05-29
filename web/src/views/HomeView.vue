@@ -21,6 +21,9 @@
             <div class="kb-name">{{ kb.name }}</div>
             <div class="kb-id">{{ kb.kb_id }}</div>
             <div class="kb-desc" v-if="kb.description">{{ kb.description }}</div>
+          <div class="kb-tags" v-if="kb.domain?.length">
+            <el-tag v-for="tag in kb.domain" :key="tag" size="small" type="info" style="margin-right:4px">{{ tag }}</el-tag>
+          </div>
           </div>
           <div class="kb-stats">
             <div class="stat">
@@ -70,7 +73,17 @@
           <el-input v-model="createForm.name" placeholder="AI 技术知识库" />
         </el-form-item>
         <el-form-item label="领域标签">
-          <el-input v-model="createForm.domain" placeholder="AI/Tech" />
+          <el-select
+            v-model="createForm.domain"
+            multiple
+            filterable
+            allow-create
+            default-first-option
+            placeholder="输入后回车添加标签"
+            style="width:100%"
+          >
+            <el-option v-for="tag in domainPresets" :key="tag" :label="tag" :value="tag" />
+          </el-select>
         </el-form-item>
         <el-form-item label="简介">
           <el-input v-model="createForm.description" type="textarea" :rows="2" />
@@ -95,7 +108,15 @@ const kbStore = useKbStore()
 
 const showCreate = ref(false)
 const creating = ref(false)
-const createForm = ref({ kb_id: '', name: '', domain: '', description: '' })
+const createForm = ref<{ kb_id: string; name: string; domain: string[]; description: string }>({
+  kb_id: '', name: '', domain: [], description: '',
+})
+
+const domainPresets = [
+  'AI', '机器学习', '深度学习', 'LLM', 'RAG',
+  '前端', '后端', '全栈', '算法', '数据分析',
+  '产品', '设计', '运营', '财经', '法律',
+]
 
 function browseKb(kbId: string) {
   router.push({ name: 'Wiki', params: { kbId } })
@@ -124,7 +145,7 @@ async function confirmCreate() {
   try {
     const kb = await kbStore.createKb(createForm.value)
     showCreate.value = false
-    createForm.value = { kb_id: '', name: '', domain: '', description: '' }
+    createForm.value = { kb_id: '', name: '', domain: [], description: '' }
     ElMessage.success(`知识库 "${kb.name}" 创建成功`)
   } catch (e: any) {
     ElMessage.error(e.response?.data?.detail || '创建失败')

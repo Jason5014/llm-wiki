@@ -76,7 +76,7 @@ class KBConfig(BaseModel):
     kb_id: str = Field(..., pattern=r"^[a-z0-9][a-z0-9-]*[a-z0-9]$")
     name: str
     description: str = ""
-    domain: str = ""
+    domain: list[str] = Field(default_factory=list)
     language: str = "zh"
     crawl_targets: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.now)
@@ -99,7 +99,7 @@ class KBDetail(BaseModel):
     kb_id: str
     name: str
     description: str
-    domain: str
+    domain: list[str]
     language: str
     status: KBStatus
     created_at: datetime
@@ -229,7 +229,7 @@ class CreateKBRequest(BaseModel):
     kb_id: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$")
     name: str
     description: str = ""
-    domain: str = ""
+    domain: list[str] = Field(default_factory=list)
     language: str = "zh"
     crawl_targets: list[str] = Field(default_factory=list)
 

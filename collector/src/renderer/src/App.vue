@@ -44,8 +44,18 @@
           <el-form-item label="名称" required>
             <el-input v-model="createKbForm.name" placeholder="AI 技术知识库" />
           </el-form-item>
-          <el-form-item label="领域">
-            <el-input v-model="createKbForm.domain" placeholder="AI/Tech（可选）" />
+          <el-form-item label="领域标签">
+            <el-select
+              v-model="createKbForm.domain"
+              multiple
+              filterable
+              allow-create
+              default-first-option
+              placeholder="输入后回车添加标签"
+              style="width:100%"
+            >
+              <el-option v-for="tag in domainPresets" :key="tag" :label="tag" :value="tag" />
+            </el-select>
           </el-form-item>
           <el-form-item label="简介">
             <el-input v-model="createKbForm.description" type="textarea" :rows="2" placeholder="可选" />
@@ -103,7 +113,17 @@ const isMac = navigator.platform.toLowerCase().includes('mac')
 // 新建知识库
 const showCreateKb = ref(false)
 const creatingKb = ref(false)
-const createKbForm = ref({ name: '', domain: '', description: '' })
+const createKbForm = ref<{ name: string; domain: string[]; description: string }>({
+  name: '',
+  domain: [],
+  description: '',
+})
+
+const domainPresets = [
+  'AI', '机器学习', '深度学习', 'LLM', 'RAG',
+  '前端', '后端', '全栈', '算法', '数据分析',
+  '产品', '设计', '运营', '财经', '法律',
+]
 
 async function confirmCreateKb() {
   if (!createKbForm.value.name.trim()) {
@@ -114,7 +134,7 @@ async function confirmCreateKb() {
   try {
     await store.createKb(createKbForm.value)
     showCreateKb.value = false
-    createKbForm.value = { name: '', domain: '', description: '' }
+    createKbForm.value = { name: '', domain: [], description: '' }
     ElMessage.success('知识库创建成功，已自动切换')
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail || e?.message || '创建失败')

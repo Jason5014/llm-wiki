@@ -57,7 +57,7 @@ export function setupIpcHandlers(store: InstanceType<typeof Store<Record<string,
   })
 
   ipcMain.handle('api:createKb', async (_, { name, domain, description }: {
-    name: string; domain?: string; description?: string
+    name: string; domain?: string[]; description?: string
   }) => {
     const baseUrl = store.get('apiBaseUrl') as string
     // 不传 kb_id，由后端自动生成 kb-{8位uuid}
