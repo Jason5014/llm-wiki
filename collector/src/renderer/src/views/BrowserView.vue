@@ -232,14 +232,48 @@ async function extractContentFromWebview(): Promise<{
   } else if (hostname.includes('zhihu.com')) {
     result = await webviewEl.value.executeJavaScript(`
       (function() {
+        // ── 优先检测是否有弹框 Modal 打开 ──────────────────────────
+        // 知乎首页点击文章卡片会出现 Modal 预览，需要从弹框内取内容和真实 URL
+        const modal = document.querySelector('.Modal--default, .Modal-content, [class*="ContentModal"]');
+        if (modal) {
+          // 弹框内的标题（文章 or 问答）
+          const modalTitle =
+            modal.querySelector('.Post-Title, .QuestionHeader-title, .ContentItem-title')?.textContent?.trim()
+            || modal.querySelector('h1, h2')?.textContent?.trim()
+            || document.title;
+          // 弹框内的正文
+          const modalContent =
+            Array.from(modal.querySelectorAll('.RichText.ztext, .Post-RichTextContainer'))
+              .map(e => e.textContent?.trim()).filter(Boolean).join('\\n\\n---\\n\\n')
+            || modal.innerText?.replace(/\\n{3,}/g, '\\n\\n').trim() || '';
+          // 尝试从弹框内找到文章的真实链接
+          const canonicalLink =
+            modal.querySelector('a[href*="/p/"], a[href*="/question/"]')?.href
+            || document.querySelector('link[rel="canonical"]')?.href
+            || location.href;
+          return {
+            title: modalTitle,
+            content: modalContent,
+            canonicalUrl: canonicalLink,
+            metadata: { source: 'zhihu', via: 'modal' }
+          };
+        }
+
+        // ── 普通页面（文章 / 问答）───────────────────────────────
         const isArticle = location.pathname.startsWith('/p/');
         const title = isArticle
           ? document.querySelector('.Post-Title')?.textContent?.trim()
           : document.querySelector('.QuestionHeader-title')?.textContent?.trim();
         const content = isArticle
           ? document.querySelector('.Post-RichTextContainer')?.textContent?.trim()
-          : Array.from(document.querySelectorAll('.RichText.ztext')).map(e => e.textContent?.trim()).join('\\n\\n---\\n\\n');
-        return { title: title || document.title, content: content || '', metadata: { source: 'zhihu' } };
+          : Array.from(document.querySelectorAll('.RichText.ztext'))
+              .map(e => e.textContent?.trim()).join('\\n\\n---\\n\\n');
+        return {
+          title: title || document.title,
+          content: content || '',
+          canonicalUrl: null,
+          metadata: { source: 'zhihu' }
+        };
       })()
     `)
   } else {
@@ -253,9 +287,12 @@ async function extractContentFromWebview(): Promise<{
     `)
   }
 
+  // 弹框场景：使用从 DOM 中提取的真实文章 URL，而非 webview 当前的页面 URL
+  const finalUrl = result.canonicalUrl || url
+
   return {
-    title: result.title || url,
-    url,
+    title: result.title || finalUrl,
+    url: finalUrl,
     content: result.content || '',
     metadata: result.metadata || {},
   }
