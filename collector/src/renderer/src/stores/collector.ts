@@ -6,7 +6,10 @@ import { ref, computed, toRaw } from 'vue'
 
 export interface QueueItem {
   id: string
+  /** 用户提交的原始 URL */
   url: string
+  /** 提取后的规范 URL（知乎弹框等场景可能与 url 不同） */
+  extractedUrl?: string
   title?: string
   status: 'pending' | 'processing' | 'done' | 'error'
   content?: string
@@ -128,7 +131,7 @@ export const useCollectorStore = defineStore('collector', () => {
 
     const docs = pendingItems.map(item => ({
       title: item.title || item.url,
-      url: item.url,
+      url: item.extractedUrl || item.url,   // 优先使用提取后的规范 URL
       content: item.content || '',
       metadata: item.metadata || {},
     }))
@@ -142,6 +145,81 @@ export const useCollectorStore = defineStore('collector', () => {
 
   function clearQueue(): void {
     queue.value = queue.value.filter(i => i.status !== 'done')
+  }
+
+  // ─────────────────────────────────────────
+  // 后端任务队列同步（自动化阶段）
+  // ─────────────────────────────────────────
+
+  /**
+   * 从后端拉取 pending 任务，添加到本地队列（去重）。
+   * 每个 QueueItem 的 metadata 里存 backendTaskId，处理完后回写状态。
+   */
+  async function syncBackendQueue(): Promise<number> {
+    if (!isElectron || !currentKbId.value) return 0
+    try {
+      const resp = await collector.getCrawlTasks({
+        status: 'pending',
+        kbId: currentKbId.value,
+        limit: 20,
+      })
+      const newTasks = resp.tasks as Array<{
+        id: string; kb_id: string; url: string;
+        status: string; priority: number; created_at: string
+      }>
+
+      let added = 0
+      for (const task of newTasks) {
+        // 已在本地队列（按 backendTaskId 去重）
+        const exists = queue.value.some(
+          q => (q.metadata as any)?.backendTaskId === task.id
+        )
+        if (exists) continue
+
+        const item = addToQueue(task.url)
+        // 将后端 task ID 存入 metadata，便于处理完成后回写
+        updateQueueItem(item.id, {
+          metadata: { backendTaskId: task.id },
+        })
+        added++
+      }
+      return added
+    } catch (e) {
+      console.warn('[Store] syncBackendQueue error:', e)
+      return 0
+    }
+  }
+
+  /**
+   * 通知后端某个任务已完成
+   */
+  async function reportTaskDone(backendTaskId: string, docId?: string): Promise<void> {
+    if (!isElectron) return
+    try {
+      await collector.updateCrawlTask({
+        taskId: backendTaskId,
+        status: 'done',
+        docId,
+      })
+    } catch (e) {
+      console.warn('[Store] reportTaskDone error:', e)
+    }
+  }
+
+  /**
+   * 通知后端某个任务失败
+   */
+  async function reportTaskFailed(backendTaskId: string, error: string): Promise<void> {
+    if (!isElectron) return
+    try {
+      await collector.updateCrawlTask({
+        taskId: backendTaskId,
+        status: 'failed',
+        error,
+      })
+    } catch (e) {
+      console.warn('[Store] reportTaskFailed error:', e)
+    }
   }
 
   return {
@@ -161,5 +239,8 @@ export const useCollectorStore = defineStore('collector', () => {
     saveCurrentPage,
     batchSave,
     clearQueue,
+    syncBackendQueue,
+    reportTaskDone,
+    reportTaskFailed,
   }
 })

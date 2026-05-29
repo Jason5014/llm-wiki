@@ -9,6 +9,18 @@ import { electronAPI } from '@electron-toolkit/preload'
 // 类型定义（渲染进程可见）
 // ─────────────────────────────────────────────
 
+export interface CrawlTask {
+  id: string
+  kb_id: string
+  url: string
+  status: 'pending' | 'running' | 'done' | 'failed'
+  priority: number
+  created_at: string
+  updated_at?: string
+  error?: string
+  doc_id?: string
+}
+
 export interface CollectorAPI {
   // 设置
   getSettings: () => Promise<{ apiBaseUrl: string; currentKbId: string }>
@@ -35,6 +47,18 @@ export interface CollectorAPI {
   // Cookie 管理
   getAllCookies: (domain?: string) => Promise<unknown[]>
   clearCookies: (domain?: string) => Promise<boolean>
+
+  // 采集任务队列（自动化）
+  getCrawlTasks: (params: { status?: string; kbId?: string; limit?: number }) => Promise<{
+    tasks: CrawlTask[]
+    total: number
+  }>
+  updateCrawlTask: (params: {
+    taskId: string
+    status: string
+    error?: string
+    docId?: string
+  }) => Promise<{ updated: boolean }>
 }
 
 // ─────────────────────────────────────────────
@@ -58,6 +82,9 @@ const collectorAPI: CollectorAPI = {
 
   getAllCookies: (domain?) => ipcRenderer.invoke('cookies:getAll', domain),
   clearCookies: (domain?) => ipcRenderer.invoke('cookies:clear', domain),
+
+  getCrawlTasks: (params) => ipcRenderer.invoke('api:getCrawlTasks', params),
+  updateCrawlTask: (params) => ipcRenderer.invoke('api:updateCrawlTask', params),
 }
 
 // 暴露 electron 内置 API（用于 webview 的 getWebContentsId 等）

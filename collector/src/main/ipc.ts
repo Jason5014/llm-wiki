@@ -125,6 +125,34 @@ export function setupIpcHandlers(store: InstanceType<typeof Store<Record<string,
     return await extractContentFromWebContents(wc)
   })
 
+  // ── 采集任务队列（后端驱动自动化）────────
+
+  ipcMain.handle('api:getCrawlTasks', async (_, { status, kbId, limit }: {
+    status?: string; kbId?: string; limit?: number
+  }) => {
+    try {
+      const baseUrl = store.get('apiBaseUrl') as string
+      const params = new URLSearchParams()
+      if (status) params.set('status', status)
+      if (kbId) params.set('kb_id', kbId)
+      if (limit) params.set('limit', String(limit))
+      const resp = await axios.get(`${baseUrl}/api/crawl/tasks?${params}`)
+      return resp.data
+    } catch (e) { throw ipcError(e) }
+  })
+
+  ipcMain.handle('api:updateCrawlTask', async (_, { taskId, status, error, docId }: {
+    taskId: string; status: string; error?: string; docId?: string
+  }) => {
+    try {
+      const baseUrl = store.get('apiBaseUrl') as string
+      const resp = await axios.patch(`${baseUrl}/api/crawl/tasks/${taskId}`, {
+        status, error, doc_id: docId
+      })
+      return resp.data
+    } catch (e) { throw ipcError(e) }
+  })
+
   // ── 文件选择对话框 ────────────────────────
 
   ipcMain.handle('dialog:openFiles', async () => {
