@@ -34,9 +34,10 @@ export interface CollectorAPI {
   // 知识库 API
   listKbs: () => Promise<unknown[]>
   createKb: (params: { name: string; domain?: string[]; description?: string }) => Promise<unknown>
-  submitDoc: (kbId: string, doc: unknown) => Promise<{ doc_id: string; saved: boolean }>
+  submitDoc: (kbId: string, doc: unknown) => Promise<{ doc_id: string; saved: boolean; quality?: any }>
   batchSubmit: (kbId: string, docs: unknown[]) => Promise<{ saved: number; doc_ids: string[] }>
   uploadFile: (kbId: string, filePath: string) => Promise<{ doc_id: string; saved: boolean; title: string }>
+  recordEpisode: (kbId: string, episode: unknown) => Promise<{ episode_id: string; recorded: boolean }>
 
   // 内容提取
   extractContent: (webContentsId: number) => Promise<{
@@ -54,6 +55,7 @@ export interface CollectorAPI {
   clearCookies: (domain?: string) => Promise<boolean>
 
   // 采集任务队列（自动化）
+  addCrawlTasks: (kbId: string, urls: string[]) => Promise<{ added: number; skipped: number }>
   getCrawlTasks: (params: { status?: string; kbId?: string; limit?: number }) => Promise<{
     tasks: CrawlTask[]
     total: number
@@ -79,6 +81,7 @@ const collectorAPI: CollectorAPI = {
   submitDoc: (kbId, doc) => ipcRenderer.invoke('api:submitDoc', { kbId, doc }),
   batchSubmit: (kbId, docs) => ipcRenderer.invoke('api:batchSubmit', { kbId, docs }),
   uploadFile: (kbId, filePath) => ipcRenderer.invoke('api:uploadFile', { kbId, filePath }),
+  recordEpisode: (kbId, episode) => ipcRenderer.invoke('api:recordEpisode', { kbId, episode }),
 
   extractContent: (webContentsId) =>
     ipcRenderer.invoke('browser:extractContent', { webContentsId }),
@@ -88,6 +91,7 @@ const collectorAPI: CollectorAPI = {
   getAllCookies: (domain?) => ipcRenderer.invoke('cookies:getAll', domain),
   clearCookies: (domain?) => ipcRenderer.invoke('cookies:clear', domain),
 
+  addCrawlTasks: (kbId, urls) => ipcRenderer.invoke('api:addCrawlTasks', { kbId, urls }),
   getCrawlTasks: (params) => ipcRenderer.invoke('api:getCrawlTasks', params),
   updateCrawlTask: (params) => ipcRenderer.invoke('api:updateCrawlTask', params),
 }

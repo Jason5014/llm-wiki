@@ -79,6 +79,7 @@ const globalQuery = ref('')
 
 const navItems = [
   { path: 'wiki', label: 'Wiki' },
+  { path: 'docs', label: '文档' },
   { path: 'search', label: '搜索' },
   { path: 'graph', label: '图谱' },
   { path: 'pipeline', label: '流水线' },

@@ -40,6 +40,12 @@ const router = createRouter({
       component: () => import('../views/PipelineView.vue'),
       meta: { title: '流水线管理' },
     },
+    {
+      path: '/kb/:kbId/docs',
+      name: 'Documents',
+      component: () => import('../views/DocumentsView.vue'),
+      meta: { title: '原始文档' },
+    },
   ],
 })
 

@@ -43,6 +43,22 @@ def health_check():
     return {"status": "ok", "service": "llm-wiki"}
 
 
+@app.get("/api/assets/{kb_id}/{filename}", tags=["静态资源"])
+async def serve_asset(kb_id: str, filename: str):
+    """提供知识库图片等静态资源"""
+    from fastapi.responses import FileResponse
+    from src.storage import assets_dir
+    import mimetypes
+
+    file_path = assets_dir(kb_id) / filename
+    if not file_path.exists():
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="资源不存在")
+
+    media_type = mimetypes.guess_type(str(file_path))[0] or "application/octet-stream"
+    return FileResponse(str(file_path), media_type=media_type)
+
+
 @app.on_event("startup")
 async def startup():
     """应用启动时初始化"""

@@ -77,6 +77,16 @@
           <el-icon><Upload /></el-icon> 批量保存（{{ unsavedDoneItems.length }}）
         </el-button>
 
+        <el-button
+          v-if="errorCount > 0"
+          size="small"
+          type="warning"
+          @click="retryAllErrors"
+          :disabled="isProcessing"
+        >
+          <el-icon><Refresh /></el-icon> 重试全部失败（{{ errorCount }}）
+        </el-button>
+
         <el-button size="small" @click="store.clearQueue()" :disabled="isProcessing">
           <el-icon><Delete /></el-icon> 清除已完成
         </el-button>
@@ -113,14 +123,14 @@
         class="queue-item"
         :class="item.status"
       >
-        <div class="item-header">
+        <div class="item-header" @click="item.status === 'done' && openPreview(item)">
           <el-icon class="status-icon">
             <Loading v-if="item.status === 'processing'" class="rotating" />
             <CircleCheck v-else-if="item.status === 'done'" style="color: var(--el-color-success)" />
             <CircleClose v-else-if="item.status === 'error'" style="color: var(--el-color-danger)" />
             <Clock v-else />
           </el-icon>
-          <span class="item-title">{{ item.title || item.url }}</span>
+          <span class="item-title" :class="{ clickable: item.status === 'done' }">{{ item.title || item.url }}</span>
           <el-tag v-if="item.docId" type="success" size="small">已保存</el-tag>
         </div>
         <div class="item-url">
@@ -129,7 +139,12 @@
             ← {{ item.url }}
           </span>
         </div>
-        <div class="item-error" v-if="item.error">{{ item.error }}</div>
+        <div class="item-error" v-if="item.error">
+          {{ item.error }}
+          <el-button size="small" type="warning" text @click="retryItem(item.id)">
+            <el-icon><Refresh /></el-icon> 重新采集
+          </el-button>
+        </div>
       </div>
     </div>
 
@@ -195,6 +210,39 @@
         <el-button type="primary" @click="savePresets">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 内容预览抽屉 -->
+    <el-drawer
+      v-model="showPreview"
+      :title="previewItem?.title || '内容预览'"
+      direction="rtl"
+      size="50%"
+    >
+      <div v-if="previewItem" class="preview-content">
+        <div class="preview-meta">
+          <el-descriptions :column="1" size="small" border>
+            <el-descriptions-item label="URL">{{ previewItem.extractedUrl || previewItem.url }}</el-descriptions-item>
+            <el-descriptions-item label="状态">
+              <el-tag type="success" size="small">已保存</el-tag>
+              <el-tag v-if="previewItem.docId" size="small" style="margin-left:4px">doc_id: {{ previewItem.docId }}</el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item v-if="previewItem.metadata?.quality" label="质检">
+              <el-tag :type="previewItem.metadata.quality.action === 'passed' ? 'success' : 'warning'" size="small">
+                {{ previewItem.metadata.quality.action }} ({{ previewItem.metadata.quality.score }})
+              </el-tag>
+              <span v-if="previewItem.metadata.quality.issues?.length" style="margin-left:4px;color:#e6a23c">
+                {{ previewItem.metadata.quality.issues.join(', ') }}
+              </span>
+            </el-descriptions-item>
+            <el-descriptions-item v-if="previewItem.metadata?.author" label="作者">{{ previewItem.metadata.author }}</el-descriptions-item>
+            <el-descriptions-item v-if="previewItem.metadata?.date" label="日期">{{ previewItem.metadata.date }}</el-descriptions-item>
+            <el-descriptions-item v-if="previewItem.metadata?.img_count" label="图片数">{{ previewItem.metadata.img_count }}</el-descriptions-item>
+          </el-descriptions>
+        </div>
+        <el-divider />
+        <div class="preview-body" v-html="renderSimpleMarkdown(previewItem.content || '')"></div>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
@@ -276,15 +324,96 @@ async function savePresets() {
   ElMessage.success('预设已保存')
 }
 
+// ── 内容预览 ────────────────────────────────────────────────
+
+function retryItem(id: string) {
+  store.retryQueueItem(id)
+  ElMessage.info('已重置为待处理，下次采集时会重新提取')
+}
+
+function retryAllErrors() {
+  const errorItems = store.queue.filter(i => i.status === 'error')
+  errorItems.forEach(item => store.retryQueueItem(item.id))
+  ElMessage.info(`已重置 ${errorItems.length} 个失败项`)
+}
+
+function openPreview(item: QueueItem) {
+  previewItem.value = item
+  showPreview.value = true
+}
+
+/** 简易 Markdown → HTML（仅用于预览展示） */
+function renderSimpleMarkdown(text: string): string {
+  let html = text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  // 代码块
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
+    `<pre><code class="lang-${lang}">${code}</code></pre>`)
+  // 标题
+  html = html.replace(/^###### (.+)$/gm, '<h6>$1</h6>')
+  html = html.replace(/^##### (.+)$/gm, '<h5>$1</h5>')
+  html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>')
+  // 分割线
+  html = html.replace(/^---+$/gm, '<hr/>')
+  // 引用
+  html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+  // 行内样式
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+  html = html.replace(/_(.+?)_/g, '<em>$1</em>')
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>')
+  // 图片和链接
+  html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g,
+    '<img src="$2" alt="$1" style="max-width:100%;border-radius:4px;margin:4px 0" />')
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+  // 列表
+  html = html.replace(/^- (.+)$/gm, '<li>$1</li>')
+  // 表格行
+  html = html.replace(/^\|(.+)\|$/gm, (_, row) => {
+    const cells = row.split('|').map((c: string) => c.trim())
+    if (cells.every((c: string) => /^[-:]+$/.test(c))) return ''
+    return '<tr>' + cells.map((c: string) => `<td>${c}</td>`).join('') + '</tr>'
+  })
+  // 段落和换行
+  html = html.replace(/\n{2,}/g, '||PARA||')
+  html = html.replace(/\n/g, '<br/>')
+  html = html.replace(/\|\|PARA\|\|/g, '</p><p>')
+  return '<p>' + html + '</p>'
+}
+
+function qualityType(action: string) {
+  if (action === 'passed') return 'success'
+  if (action === 'blocked') return 'danger'
+  return 'warning'
+}
+function qualityLabel(action: string) {
+  if (action === 'passed') return '通过'
+  if (action === 'blocked') return '需登录'
+  return '需重采'
+}
+function issueLabel(issue: string) {
+  const map: Record<string, string> = {
+    too_short: '内容过短', bad_title: '标题无效', truncated: '内容截断',
+    blocked: '登录墙/验证码', images_missing: '图片缺失',
+  }
+  return map[issue] || issue
+}
+
 // ── refs ─────────────────────────────────────────────────────
 
 const bgWebviewEl = ref<any>(null)    // 隐藏 webview，用于后台加载页面
 const isProcessing = ref(false)
 const isSyncing = ref(false)
-const autoSave = ref(false)           // 采集后是否自动提交到知识库
+const autoSave = ref(true)            // 采集后自动提交到知识库（默认开启）
 const autoPoll = ref(false)           // 自动轮询后端任务队列
 const showBatchDialog = ref(false)
 const batchUrlsText = ref('')
+
+// 内容预览
+const showPreview = ref(false)
+const previewItem = ref<QueueItem | null>(null)
 
 // 自动轮询定时器（30s 间隔）
 let pollTimer: ReturnType<typeof setInterval> | null = null
@@ -432,17 +561,61 @@ async function processQueue() {
       store.updateQueueItem(item.id, updates)
       successCount++
 
-      // ④ 自动保存（可选）
+      // ④ 自动保存（可选）+ Tier0 质检反馈环
       let savedDocId: string | undefined
       if (autoSave.value) {
         try {
-          savedDocId = await store.saveCurrentPage({
+          const saveResult = await store.saveCurrentPage({
             title: result.title,
             url: result.url,
             content: result.content,
             metadata: result.metadata,
           })
-          store.updateQueueItem(item.id, { docId: savedDocId })
+          savedDocId = saveResult.docId
+          // 回写质检结果到队列项
+          const qMeta = { ...(item.metadata || {}), quality: saveResult.quality }
+          store.updateQueueItem(item.id, { docId: savedDocId, metadata: qMeta })
+
+          // Tier0 质检未通过
+          if (saveResult.quality?.action === 'blocked') {
+            // 登录墙/验证码：重提取无意义，标记需要用户手动处理
+            console.log('[Queue] Tier0 blocked for', item.url, saveResult.quality.issues)
+            store.updateQueueItem(item.id, {
+              error: '需要登录或验证码，请在浏览器中登录后重试',
+              status: 'error',
+            })
+          } else if (saveResult.quality?.action === 're_extract') {
+            console.log('[Queue] Tier0 re_extract signaled for', item.url, saveResult.quality.issues)
+            try {
+              const retry = await extract(bgWebviewEl.value, item.url)
+              const retryResult = await store.saveCurrentPage({
+                title: retry.title,
+                url: retry.url,
+                content: retry.content,
+                metadata: retry.metadata,
+              })
+              // 记录 episode：原始提取 → 质检 → 重试
+              await store.recordEpisode({
+                url: item.url,
+                kb_id: store.currentKbId,
+                trigger: 'tier0_re_extract',
+                first_quality: saveResult.quality,
+                first_title: result.title,
+                first_len: result.content?.length || 0,
+                retry_title: retry.title,
+                retry_len: retry.content?.length || 0,
+                retry_quality: retryResult.quality,
+                issues: saveResult.quality.issues,
+              })
+              if (retryResult.docId) {
+                savedDocId = retryResult.docId
+                const rqMeta = { ...(item.metadata || {}), quality: retryResult.quality }
+                store.updateQueueItem(item.id, { docId: savedDocId, metadata: rqMeta })
+              }
+            } catch (retryErr: any) {
+              console.warn('[Queue] re-extract failed for', item.url, retryErr.message)
+            }
+          }
         } catch (saveErr: any) {
           // 自动保存失败不影响采集状态，只打印警告
           console.warn('[Queue] auto-save failed for', item.url, saveErr.message)
@@ -469,6 +642,12 @@ async function processQueue() {
   }
 
   isProcessing.value = false
+
+  // 刷新知识库统计
+  if (autoSave.value && successCount > 0) {
+    await store.loadKbList()
+  }
+
   if (successCount + failCount > 0) {
     ElMessage.success(`采集完成：✅ ${successCount} 成功，❌ ${failCount} 失败`)
   }
@@ -531,8 +710,14 @@ async function saveAllDone() {
   }
   const count = unsavedDoneItems.value.length
   try {
-    await store.batchSave()
-    ElMessage.success(`已保存 ${count} 篇文档到「${store.kbList.find(k => k.kb_id === store.currentKbId)?.name ?? store.currentKbId}」`)
+    const { saved, qualities } = await store.batchSave()
+    await store.loadKbList()  // 刷新知识库统计
+    const reExtractCount = qualities.filter(q => q.quality?.action === 're_extract').length
+    if (reExtractCount > 0) {
+      ElMessage.warning(`已保存 ${saved} 篇，其中 ${reExtractCount} 篇质检未通过（建议重新采集）`)
+    } else {
+      ElMessage.success(`已保存 ${saved} 篇文档到「${store.kbList.find(k => k.kb_id === store.currentKbId)?.name ?? store.currentKbId}」`)
+    }
   } catch (e: any) {
     ElMessage.error(`保存失败：${e.message}`)
   }
@@ -676,5 +861,47 @@ async function saveAllDone() {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 8px;
+}
+
+.item-title.clickable {
+  cursor: pointer;
+}
+.item-title.clickable:hover {
+  color: var(--el-color-primary);
+  text-decoration: underline;
+}
+
+.preview-content {
+  padding: 0 4px;
+}
+.preview-meta {
+  margin-bottom: 12px;
+}
+.preview-body {
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--el-text-color-primary);
+  word-break: break-word;
+}
+.preview-body :deep(h1),
+.preview-body :deep(h2),
+.preview-body :deep(h3) {
+  margin: 16px 0 8px;
+  font-weight: 600;
+}
+.preview-body :deep(code) {
+  background: var(--el-fill-color-light);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 13px;
+}
+.preview-body :deep(img) {
+  max-width: 100%;
+  border-radius: 4px;
+  margin: 4px 0;
+}
+.preview-body :deep(li) {
+  margin-left: 16px;
+  list-style: disc;
 }
 </style>

@@ -17,7 +17,7 @@
       <el-input
         v-model="addressInput"
         class="url-input"
-        placeholder="输入网址..."
+        placeholder="输入网址或搜索词..."
         @keyup.enter="navigate"
         size="small"
       >
@@ -87,10 +87,17 @@
     <el-dialog
       v-model="showPreview"
       title="预览并确认保存"
-      width="640px"
+      width="680px"
       :close-on-click-modal="false"
     >
       <div class="preview-content">
+        <!-- 统计信息 -->
+        <div class="preview-stats">
+          <el-statistic title="字数" :value="previewData.content?.length || 0" />
+          <el-statistic title="图片" :value="previewData.metadata?.img_count || 0" suffix="张" />
+          <el-statistic title="来源" :value="previewData.metadata?.source || 'web'" />
+        </div>
+        <el-divider style="margin: 12px 0" />
         <el-form label-width="80px" label-position="left">
           <el-form-item label="标题">
             <el-input v-model="previewData.title" />
@@ -99,22 +106,22 @@
             <el-input v-model="previewData.url" disabled />
           </el-form-item>
           <!-- 元数据展示 -->
-          <template v-if="previewData.metadata?.author || previewData.metadata?.date">
-            <el-form-item v-if="previewData.metadata?.author" label="作者">
-              <span>{{ previewData.metadata.author }}</span>
-              <span v-if="previewData.metadata?.authorBio" style="color: var(--el-text-color-secondary); margin-left: 8px;">{{ previewData.metadata.authorBio }}</span>
-            </el-form-item>
-            <el-form-item v-if="previewData.metadata?.date" label="发布时间">
-              <span>{{ previewData.metadata.date }}</span>
-            </el-form-item>
-            <el-form-item label="互动数据" v-if="previewData.metadata?.votes || previewData.metadata?.comments">
-              <el-tag v-if="previewData.metadata?.votes" size="small" style="margin-right: 8px;">赞同 {{ previewData.metadata.votes }}</el-tag>
-              <el-tag v-if="previewData.metadata?.comments" size="small" type="info">评论 {{ previewData.metadata.comments }}</el-tag>
-            </el-form-item>
-            <el-form-item v-if="previewData.metadata?.tags?.length" label="标签">
-              <el-tag v-for="tag in previewData.metadata.tags" :key="tag" size="small" style="margin-right: 4px;">{{ tag }}</el-tag>
-            </el-form-item>
-          </template>
+          <el-form-item v-if="previewData.metadata?.author" label="作者">
+            <span>{{ previewData.metadata.author }}</span>
+            <span v-if="previewData.metadata?.authorBio" style="color: var(--el-text-color-secondary); margin-left: 8px;">{{ previewData.metadata.authorBio }}</span>
+          </el-form-item>
+          <el-form-item v-if="previewData.metadata?.date" label="发布时间">
+            <span>{{ previewData.metadata.date }}</span>
+          </el-form-item>
+          <el-form-item label="互动数据" v-if="previewData.metadata?.votes || previewData.metadata?.comments || previewData.metadata?.likes">
+            <el-tag v-if="previewData.metadata?.votes" size="small" style="margin-right: 8px;">赞同 {{ previewData.metadata.votes }}</el-tag>
+            <el-tag v-if="previewData.metadata?.likes" size="small" style="margin-right: 8px;">点赞 {{ previewData.metadata.likes }}</el-tag>
+            <el-tag v-if="previewData.metadata?.comments" size="small" type="info">评论 {{ previewData.metadata.comments }}</el-tag>
+            <el-tag v-if="previewData.metadata?.collects" size="small" type="warning">收藏 {{ previewData.metadata.collects }}</el-tag>
+          </el-form-item>
+          <el-form-item v-if="previewData.metadata?.tags?.length" label="标签">
+            <el-tag v-for="tag in previewData.metadata.tags" :key="tag" size="small" style="margin-right: 4px;">{{ tag }}</el-tag>
+          </el-form-item>
           <el-form-item label="内容预览">
             <el-input
               v-model="previewData.contentPreview"
@@ -177,8 +184,8 @@ import { extract } from '../extractors'
 const store = useCollectorStore()
 const webviewEl = ref<any>(null)
 
-const addressInput = ref('https://www.zhihu.com')
-const currentUrl = ref('https://www.zhihu.com')
+const addressInput = ref('')
+const currentUrl = ref('about:blank')
 const isLoading = ref(false)
 const isSaving = ref(false)
 let loadingTimer: ReturnType<typeof setTimeout> | null = null
@@ -283,6 +290,7 @@ const currentKbName = computed(() => {
 
 function navigate() {
   let url = addressInput.value.trim()
+  if (!url) return
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
     // 如果不是 URL，当作搜索词
     if (!url.includes('.')) {
@@ -440,14 +448,54 @@ async function confirmSave() {
 
   isSaving.value = true
   try {
-    const docId = await store.saveCurrentPage({
+    const saveResult = await store.saveCurrentPage({
       title: previewData.value.title,
       url: previewData.value.url,
       content: previewData.value.content,
       metadata: previewData.value.metadata,
     })
-    showPreview.value = false
-    ElMessage.success(`✅ 已保存，doc_id: ${docId}`)
+
+    // Tier0 质检反馈
+    if (saveResult.quality?.action === 'blocked') {
+      ElMessage.error(`页面需要登录或验证码，请先在浏览器中登录后再保存`)
+      showPreview.value = false
+      return
+    } else if (saveResult.quality?.action === 're_extract') {
+      ElMessage.warning(`质检未通过（${saveResult.quality.issues.join(', ')}），正在重试提取...`)
+      try {
+        const retry = await extract(webviewEl.value, previewData.value.url)
+        const retryResult = await store.saveCurrentPage({
+          title: retry.title,
+          url: retry.url,
+          content: retry.content,
+          metadata: retry.metadata,
+        })
+        await store.recordEpisode({
+          url: previewData.value.url,
+          kb_id: store.currentKbId,
+          trigger: 'tier0_re_extract',
+          first_quality: saveResult.quality,
+          first_title: previewData.value.title,
+          first_len: previewData.value.content?.length || 0,
+          retry_title: retry.title,
+          retry_len: retry.content?.length || 0,
+          retry_quality: retryResult.quality,
+          issues: saveResult.quality.issues,
+        })
+        showPreview.value = false
+        if (retryResult.quality?.action === 're_extract') {
+          ElMessage.warning(`重试后仍不理想：${retryResult.quality.issues.join(', ')}`)
+        } else {
+          ElMessage.success(`✅ 重试保存成功，doc_id: ${retryResult.docId}`)
+        }
+      } catch (retryErr: any) {
+        ElMessage.warning(`重试失败：${retryErr.message}，首次保存结果已保留`)
+        showPreview.value = false
+      }
+    } else {
+      showPreview.value = false
+      ElMessage.success(`✅ 已保存，doc_id: ${saveResult.docId}`)
+    }
   } catch (e: any) {
     ElMessage.error(`保存失败：${e.message}`)
   } finally {
@@ -523,5 +571,10 @@ onUnmounted(() => {
 .preview-content {
   max-height: 60vh;
   overflow-y: auto;
+}
+.preview-stats {
+  display: flex;
+  justify-content: space-around;
+  text-align: center;
 }
 </style>

@@ -105,7 +105,15 @@ function htmlToMd(el) {
         break;
 
       case 'img':
-        if (node.alt) buf.push('[图片: ' + node.alt + ']');
+        (function() {
+          var src = node.getAttribute('data-original')
+            || node.getAttribute('data-actualsrc')
+            || node.getAttribute('data-src')
+            || node.src || '';
+          if (!src || src.startsWith('data:')) return;
+          var alt = (node.alt || node.getAttribute('aria-label') || '').trim();
+          buf.push('![' + alt + '](' + src + ')');
+        })();
         break;
 
       case 'table':

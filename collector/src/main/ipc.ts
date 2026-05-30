@@ -97,6 +97,14 @@ export function setupIpcHandlers(store: InstanceType<typeof Store<Record<string,
     } catch (e) { throw ipcError(e) }
   })
 
+  ipcMain.handle('api:recordEpisode', async (_, { kbId, episode }: { kbId: string; episode: Record<string, unknown> }) => {
+    try {
+      const baseUrl = store.get('apiBaseUrl') as string
+      const resp = await axios.post(`${baseUrl}/api/collect/${kbId}/episode`, episode)
+      return resp.data
+    } catch (e) { throw ipcError(e) }
+  })
+
   ipcMain.handle('api:uploadFile', async (_, { kbId, filePath }: { kbId: string; filePath: string }) => {
     try {
       const baseUrl = store.get('apiBaseUrl') as string
@@ -127,6 +135,18 @@ export function setupIpcHandlers(store: InstanceType<typeof Store<Record<string,
   })
 
   // ── 采集任务队列（后端驱动自动化）────────
+
+  ipcMain.handle('api:addCrawlTasks', async (_, { kbId, urls }: {
+    kbId: string; urls: string[]
+  }) => {
+    try {
+      const baseUrl = store.get('apiBaseUrl') as string
+      const resp = await axios.post(`${baseUrl}/api/crawl/tasks`, {
+        kb_id: kbId, urls, priority: 0
+      })
+      return resp.data
+    } catch (e) { throw ipcError(e) }
+  })
 
   ipcMain.handle('api:getCrawlTasks', async (_, { status, kbId, limit }: {
     status?: string; kbId?: string; limit?: number

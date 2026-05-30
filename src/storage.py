@@ -48,6 +48,16 @@ def db_dir(kb_id: str) -> Path:
     return kb_dir(kb_id) / "db"
 
 
+def assets_dir(kb_id: str) -> Path:
+    """图片等静态资源目录"""
+    return kb_dir(kb_id) / "assets"
+
+
+def quality_dir(kb_id: str) -> Path:
+    """质检结果目录"""
+    return kb_dir(kb_id) / "quality"
+
+
 def config_path(kb_id: str) -> Path:
     return kb_dir(kb_id) / "config.json"
 
@@ -76,6 +86,8 @@ def init_kb_dirs(kb_id: str) -> None:
         entity_dir(kb_id),
         concept_dir(kb_id),
         db_dir(kb_id),
+        assets_dir(kb_id),
+        quality_dir(kb_id),
     ]:
         d.mkdir(parents=True, exist_ok=True)
 
@@ -355,6 +367,79 @@ def load_graph(kb_id: str) -> dict[str, Any] | None:
     if not path.exists():
         return None
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+# ─────────────────────────────────────────────
+# 质检结果存储
+# ─────────────────────────────────────────────
+
+def save_quality(kb_id: str, doc_id: str, quality: dict) -> None:
+    """保存单篇文档的质检结果"""
+    q_dir = quality_dir(kb_id)
+    q_dir.mkdir(parents=True, exist_ok=True)
+    path = q_dir / f"{doc_id}.json"
+    path.write_text(json.dumps(quality, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def load_quality(kb_id: str, doc_id: str) -> dict | None:
+    """加载单篇文档的质检结果"""
+    path = quality_dir(kb_id) / f"{doc_id}.json"
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def load_all_qualities(kb_id: str) -> dict[str, dict]:
+    """加载知识库所有文档的质检结果，返回 {doc_id: quality}"""
+    q_dir = quality_dir(kb_id)
+    if not q_dir.exists():
+        return {}
+    result = {}
+    for p in q_dir.glob("*.json"):
+        try:
+            result[p.stem] = json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+    return result
+
+
+# ─────────────────────────────────────────────
+# Episode 存储（质检反馈环）
+# ─────────────────────────────────────────────
+
+def episodes_dir(kb_id: str) -> Path:
+    return kb_dir(kb_id) / "episodes"
+
+
+async def save_episode(kb_id: str, episode: dict[str, Any]) -> str:
+    """保存一条质检 episode，返回 episode_id"""
+    import uuid
+    ep_dir = episodes_dir(kb_id)
+    ep_dir.mkdir(parents=True, exist_ok=True)
+    ep_id = episode.get("episode_id") or uuid.uuid4().hex[:12]
+    episode["episode_id"] = ep_id
+    episode.setdefault("recorded_at", datetime.now().isoformat())
+    path = ep_dir / f"{ep_id}.json"
+    async with aiofiles.open(path, "w", encoding="utf-8") as f:
+        await f.write(json.dumps(episode, ensure_ascii=False, indent=2))
+    return ep_id
+
+
+def list_episodes(kb_id: str) -> list[dict[str, Any]]:
+    """列出知识库的所有 episode"""
+    ep_dir = episodes_dir(kb_id)
+    if not ep_dir.exists():
+        return []
+    results = []
+    for p in sorted(ep_dir.glob("*.json")):
+        try:
+            results.append(json.loads(p.read_text(encoding="utf-8")))
+        except Exception:
+            continue
+    return results
 
 
 # ─────────────────────────────────────────────

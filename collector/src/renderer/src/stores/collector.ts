@@ -24,6 +24,8 @@ function deepToRaw<T>(obj: T): any {
 
 export interface QueueItem {
   id: string
+  /** 后端 crawl_tasks 表的真实 ID（用于 API 更新） */
+  backendId?: string
   /** 用户提交的原始 URL */
   url: string
   /** 提取后的规范 URL（知乎弹框等场景可能与 url 不同） */
@@ -64,6 +66,61 @@ export const useCollectorStore = defineStore('collector', () => {
   const pendingCount = computed(() => queue.value.filter(i => i.status === 'pending').length)
   const doneCount = computed(() => queue.value.filter(i => i.status === 'done').length)
 
+  // ── 队列持久化（服务端 SQLite）──
+
+  /** 从后端加载全量历史任务（合并本地已有数据） */
+  async function loadQueue() {
+    if (!isElectron || !currentKbId.value) return
+    try {
+      const resp = await collector.getCrawlTasks({ kbId: currentKbId.value, limit: 200 })
+      const tasks = resp.tasks as any[]
+
+      // 保留本地已有的 content/metadata（提取结果）
+      const localMap = new Map(queue.value.map(i => [i.id, i]))
+
+      const items: QueueItem[] = tasks.map(t => {
+        const local = localMap.get(t.id)
+        // 也尝试按 URL 匹配本地项（本地临时 ID 与后端 ID 不同的情况）
+        const localByUrl = !local ? queue.value.find(q => q.url === t.url) : local
+        return {
+          id: t.id,
+          backendId: t.id,
+          url: t.url,
+          extractedUrl: localByUrl?.extractedUrl,
+          title: localByUrl?.title || t.url,
+          status: _mapStatusFromBackend(t.status),
+          content: localByUrl?.content,
+          metadata: localByUrl?.metadata || (t.doc_id ? { quality: undefined } : undefined),
+          error: t.error || undefined,
+          addedAt: new Date(t.created_at),
+          docId: t.doc_id || localByUrl?.docId || undefined,
+        }
+      })
+
+      // 补充仅存在于本地的项（刚添加还未同步到后端的）
+      const backendIds = new Set(tasks.map(t => t.id))
+      const localOnly = queue.value.filter(i => !backendIds.has(i.id))
+      queue.value = [...localOnly, ...items]
+    } catch (e) {
+      console.warn('[Store] loadQueue error:', e)
+    }
+  }
+
+  /** 后端状态 → 前端状态 */
+  function _mapStatusFromBackend(s: string): QueueItem['status'] {
+    if (s === 'running') return 'processing'
+    if (s === 'failed') return 'error'
+    if (s === 'done') return 'done'
+    return 'pending'
+  }
+
+  /** 前端状态 → 后端状态 */
+  function _mapStatusToBackend(s: QueueItem['status']): string {
+    if (s === 'processing') return 'running'
+    if (s === 'error') return 'failed'
+    return s
+  }
+
   // 设置
   const apiBaseUrl = ref('http://localhost:8765')
 
@@ -81,6 +138,7 @@ export const useCollectorStore = defineStore('collector', () => {
     const settings = await collector.getSettings()
     apiBaseUrl.value = settings.apiBaseUrl
     currentKbId.value = settings.currentKbId
+    await loadQueue()
   }
 
   async function saveSettings() {
@@ -121,6 +179,12 @@ export const useCollectorStore = defineStore('collector', () => {
       addedAt: new Date(),
     }
     queue.value.unshift(item)
+    // 后台提交到服务端持久化（不阻塞 UI）
+    if (isElectron && currentKbId.value) {
+      collector.addCrawlTasks(currentKbId.value, [url])
+        .then(() => loadQueue())  // 刷新以获取后端分配的真实 ID
+        .catch((e: any) => console.warn('[Store] addToQueue backend sync error:', e))
+    }
     return item
   }
 
@@ -128,6 +192,43 @@ export const useCollectorStore = defineStore('collector', () => {
     const idx = queue.value.findIndex(i => i.id === id)
     if (idx !== -1) {
       queue.value[idx] = { ...queue.value[idx], ...updates }
+      // 状态变更同步到后端（使用 backendId，跳过无 backendId 的本地临时项）
+      if (updates.status && isElectron) {
+        const backendId = queue.value[idx].backendId
+        if (backendId) {
+          collector.updateCrawlTask({
+            taskId: backendId,
+            status: _mapStatusToBackend(updates.status),
+            error: updates.error,
+            docId: updates.docId,
+          }).catch((e: any) => console.warn('[Store] updateQueueItem backend sync error:', e))
+        }
+      }
+    }
+  }
+
+  async function retryQueueItem(id: string): Promise<void> {
+    const idx = queue.value.findIndex(i => i.id === id)
+    if (idx !== -1) {
+      const backendId = queue.value[idx].backendId
+      queue.value[idx] = {
+        ...queue.value[idx],
+        status: 'pending',
+        error: undefined,
+        content: undefined,
+        metadata: undefined,
+        docId: undefined,
+        title: undefined,
+        extractedUrl: undefined,
+      }
+      // 同步到后端：重置为 pending
+      if (isElectron && backendId) {
+        try {
+          await collector.updateCrawlTask({ taskId: backendId, status: 'pending' })
+        } catch (e) {
+          console.warn('[Store] retryQueueItem backend sync error:', e)
+        }
+      }
     }
   }
 
@@ -136,16 +237,25 @@ export const useCollectorStore = defineStore('collector', () => {
     content: string
     url: string
     metadata: Record<string, unknown>
-  }): Promise<string> {
+  }): Promise<{ docId: string; quality?: any }> {
     if (!isElectron) throw new Error('请在 Electron 应用中操作')
     if (!currentKbId.value) throw new Error('请先选择知识库')
     const result = await collector.submitDoc(currentKbId.value, deepToRaw(extractResult))
-    return result.doc_id
+    return { docId: result.doc_id, quality: result.quality }
   }
 
-  async function batchSave(): Promise<void> {
+  async function recordEpisode(episode: Record<string, unknown>): Promise<void> {
+    if (!isElectron || !currentKbId.value) return
+    try {
+      await collector.recordEpisode(currentKbId.value, deepToRaw(episode))
+    } catch (e) {
+      console.warn('[Store] recordEpisode error:', e)
+    }
+  }
+
+  async function batchSave(): Promise<{ saved: number; qualities: any[] }> {
     const pendingItems = queue.value.filter(i => i.status === 'done' && !i.docId)
-    if (!isElectron || !pendingItems.length || !currentKbId.value) return
+    if (!isElectron || !pendingItems.length || !currentKbId.value) return { saved: 0, qualities: [] }
 
     const docs = pendingItems.map(item => ({
       title: item.title || item.url,
@@ -159,6 +269,8 @@ export const useCollectorStore = defineStore('collector', () => {
     result.doc_ids.forEach((docId: string, i: number) => {
       updateQueueItem(pendingItems[i].id, { docId })
     })
+
+    return { saved: result.saved, qualities: result.qualities || [] }
   }
 
   function clearQueue(): void {
@@ -170,42 +282,13 @@ export const useCollectorStore = defineStore('collector', () => {
   // ─────────────────────────────────────────
 
   /**
-   * 从后端拉取 pending 任务，添加到本地队列（去重）。
-   * 每个 QueueItem 的 metadata 里存 backendTaskId，处理完后回写状态。
+   * 从后端同步全量任务到本地队列。
+   * 现在 loadQueue 已包含此功能，此函数保留兼容性。
    */
   async function syncBackendQueue(): Promise<number> {
-    if (!isElectron || !currentKbId.value) return 0
-    try {
-      const resp = await collector.getCrawlTasks({
-        status: 'pending',
-        kbId: currentKbId.value,
-        limit: 20,
-      })
-      const newTasks = resp.tasks as Array<{
-        id: string; kb_id: string; url: string;
-        status: string; priority: number; created_at: string
-      }>
-
-      let added = 0
-      for (const task of newTasks) {
-        // 已在本地队列（按 backendTaskId 去重）
-        const exists = queue.value.some(
-          q => (q.metadata as any)?.backendTaskId === task.id
-        )
-        if (exists) continue
-
-        const item = addToQueue(task.url)
-        // 将后端 task ID 存入 metadata，便于处理完成后回写
-        updateQueueItem(item.id, {
-          metadata: { backendTaskId: task.id },
-        })
-        added++
-      }
-      return added
-    } catch (e) {
-      console.warn('[Store] syncBackendQueue error:', e)
-      return 0
-    }
+    const before = queue.value.length
+    await loadQueue()
+    return queue.value.length - before
   }
 
   /**
@@ -254,11 +337,14 @@ export const useCollectorStore = defineStore('collector', () => {
     createKb,
     addToQueue,
     updateQueueItem,
+    retryQueueItem,
+    loadQueue,
     saveCurrentPage,
     batchSave,
     clearQueue,
     syncBackendQueue,
     reportTaskDone,
     reportTaskFailed,
+    recordEpisode,
   }
 })

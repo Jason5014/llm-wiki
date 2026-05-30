@@ -36,9 +36,18 @@ export async function extractZhihu(
         var mContentEl =
           modal.querySelector('.Post-RichTextContainer') ||
           modal.querySelector('.RichText.ztext');
+
+        // 统计有效图片数
+        var mImgCount = 0;
+        if (mContentEl) {
+          mContentEl.querySelectorAll('img').forEach(function(img) {
+            var s = img.getAttribute('data-original') || img.getAttribute('data-actualsrc') || img.getAttribute('data-src') || img.src || '';
+            if (s && !s.startsWith('data:')) mImgCount++;
+          });
+        }
         var mContent = mContentEl
           ? htmlToMd(mContentEl)
-          : (modal.innerText || '').replace(/\\n{3,}/g, '\\n\\n').trim().substring(0, 8000);
+          : (modal.innerText || '').replace(/\\n{3,}/g, '\\n\\n').trim();
 
         // 找到弹框内文章的真实 URL
         var mLink =
@@ -60,6 +69,7 @@ export async function extractZhihu(
             author: mAuthor.trim() || undefined,
             date:   mDate.trim()   || undefined,
             votes:  mVotes.trim()  || undefined,
+            img_count: mImgCount,
           }
         };
       }
@@ -70,6 +80,15 @@ export async function extractZhihu(
       if (path.startsWith('/p/')) {
         var title = (document.querySelector('.Post-Title') || {}).textContent || document.title;
         var contentEl = document.querySelector('.Post-RichTextContainer');
+
+        // 统计有效图片数
+        var pImgCount = 0;
+        if (contentEl) {
+          contentEl.querySelectorAll('img').forEach(function(img) {
+            var s = img.getAttribute('data-original') || img.getAttribute('data-actualsrc') || img.getAttribute('data-src') || img.src || '';
+            if (s && !s.startsWith('data:')) pImgCount++;
+          });
+        }
         var content = contentEl ? htmlToMd(contentEl) : '';
 
         var author    = (document.querySelector('.AuthorInfo-name') || {}).textContent || '';
@@ -95,6 +114,7 @@ export async function extractZhihu(
             votes:     votes.trim()     || undefined,
             comments:  comments.trim()  || undefined,
             tags:      tags.length ? tags : undefined,
+            img_count: pImgCount,
           }
         };
       }
@@ -144,7 +164,7 @@ export async function extractZhihu(
       var fallbackEl = document.querySelector('.RichText.ztext, article, main') || document.body;
       return {
         title: document.title,
-        content: htmlToMd(fallbackEl).substring(0, 10000),
+        content: htmlToMd(fallbackEl),
         canonicalUrl: null,
         metadata: { source: 'zhihu', pageType: 'other' }
       };

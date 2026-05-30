@@ -37,15 +37,25 @@ export async function extractXiaohongshu(
         })
         .filter(function(t) { return t.length > 0 && t.length < 20; });
 
-      // 图片 alt 描述（图文笔记轮播图）
-      var imgAlts = Array.from(
+      // 图片（图文笔记轮播图，取真实地址）
+      var imgs = Array.from(
         document.querySelectorAll('.swiper-slide img, .media-container img')
       )
-        .map(function(img) { return (img.getAttribute('alt') || '').trim(); })
+        .map(function(img) {
+          var src = img.getAttribute('data-original')
+            || img.getAttribute('data-actualsrc')
+            || img.getAttribute('data-src')
+            || img.src || '';
+          if (!src || src.startsWith('data:')) return null;
+          var alt = (img.getAttribute('alt') || '').trim();
+          return { src: src, alt: alt };
+        })
         .filter(Boolean);
 
-      if (imgAlts.length) {
-        content += '\\n\\n**图片描述：**\\n' + imgAlts.map(function(a) { return '- ' + a; }).join('\\n');
+      if (imgs.length) {
+        content += '\\n\\n**图片：**\\n' + imgs.map(function(i) {
+          return '![' + i.alt + '](' + i.src + ')';
+        }).join('\\n');
       }
 
       // 互动数据
@@ -61,12 +71,13 @@ export async function extractXiaohongshu(
         title: title,
         content: content.trim(),
         metadata: {
-          source:   'xiaohongshu',
-          author:   author.trim() || undefined,
-          likes:    likes.trim(),
-          collects: collects.trim(),
-          comments: comments.trim(),
-          tags:     tags.length ? tags : undefined,
+          source:    'xiaohongshu',
+          author:    author.trim() || undefined,
+          likes:     likes.trim(),
+          collects:  collects.trim(),
+          comments:  comments.trim(),
+          tags:      tags.length ? tags : undefined,
+          img_count: imgs.length,
         }
       };
     })()

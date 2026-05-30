@@ -28,6 +28,8 @@ export const kbApi = {
 export const collectApi = {
   listRaw: (kbId: string, page = 1, pageSize = 20) =>
     api.get(`/collect/${kbId}/raw`, { params: { page, page_size: pageSize } }),
+  getRaw: (kbId: string, docId: string) =>
+    api.get(`/collect/${kbId}/raw/${docId}`),
   submitRaw: (kbId: string, doc: { title: string; url?: string; content: string; metadata?: object }) =>
     api.post(`/collect/${kbId}/raw`, doc),
   uploadFile: (kbId: string, file: File) => {
