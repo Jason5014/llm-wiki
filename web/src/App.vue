@@ -100,6 +100,19 @@ watch(() => route.params.kbId, (id) => {
   if (id) kbStore.setCurrentKb(id as string)
 })
 
+// KB 切换时同步导航到对应路由
+watch(() => kbStore.currentKbId, (newId, oldId) => {
+  if (!newId || newId === oldId) return
+  // 如果当前在 KB 相关页面，切换到新 KB 的对应页面
+  const currentPath = route.path
+  if (currentPath.startsWith('/kb/') && oldId) {
+    router.replace(currentPath.replace(`/kb/${oldId}/`, `/kb/${newId}/`))
+  } else if (route.name === 'KBHome') {
+    // 在首页选了 KB，跳到 Wiki 页
+    router.push(`/kb/${newId}/wiki`)
+  }
+})
+
 onMounted(async () => {
   await kbStore.loadKbList()
 })

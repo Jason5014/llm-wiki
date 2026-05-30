@@ -164,28 +164,47 @@ async def process_all_sources(
     force: bool = False,
     doc_ids: list[str] | None = None,
     progress_callback=None,
+    error_callback=None,
 ) -> list[SourcePage]:
     """
     批量处理所有原始文档（并发受限）
     progress_callback(completed, total, message) 用于进度上报
+    error_callback(msg) 用于上报非致命错误
     """
     all_ids = doc_ids or list_raw_doc_ids(kb_id)
     total = len(all_ids)
+
+    if not all_ids:
+        msg = "没有找到待处理的原始文档"
+        logger.warning(msg)
+        if error_callback:
+            await error_callback(msg)
+        return []
+
     logger.info(f"开始处理 source 阶段，共 {total} 篇文档")
 
     results: list[SourcePage] = []
     completed = 0
+    failed = 0
 
     # 使用信号量限制并发（最多 llm_max_concurrent 个同时运行）
     semaphore = asyncio.Semaphore(settings.llm_max_concurrent)
 
     async def _process_with_sem(doc_id: str):
-        nonlocal completed
+        nonlocal completed, failed
         async with semaphore:
             page = await process_single_document(kb_id, doc_id, force=force)
             completed += 1
+            if page:
+                msg = f"✅ 处理完成：{doc_id}"
+            elif page is None and not force and source_page_exists(kb_id, doc_id):
+                msg = f"⏭️ 跳过（已存在）：{doc_id}"
+            else:
+                failed += 1
+                msg = f"❌ 处理失败：{doc_id}"
+                if error_callback:
+                    await error_callback(msg)
             if progress_callback:
-                msg = f"{'✅ 处理完成' if page else '⏭️ 跳过（已存在）'}：{doc_id}"
                 await progress_callback(completed, total, msg)
             return page
 
@@ -196,7 +215,16 @@ async def process_all_sources(
         if isinstance(p, SourcePage):
             results.append(p)
         elif isinstance(p, Exception):
-            logger.error(f"处理异常：{p}")
+            failed += 1
+            err_msg = f"处理异常：{p}"
+            logger.error(err_msg)
+            if error_callback:
+                await error_callback(err_msg)
 
-    logger.info(f"source 阶段完成，成功 {len(results)}/{total}")
+    logger.info(f"source 阶段完成，成功 {len(results)}/{total}，失败 {failed}")
+
+    if failed > 0 and not results:
+        if error_callback:
+            await error_callback(f"所有 {failed} 篇文档处理失败，请检查 LLM API 配置")
+
     return results

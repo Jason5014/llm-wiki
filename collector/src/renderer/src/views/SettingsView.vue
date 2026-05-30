@@ -67,7 +67,9 @@ import { useCollectorStore } from '../stores/collector'
 const store = useCollectorStore()
 const testing = ref(false)
 const cookies = ref<any[]>([])
-const electronVersion = ref(process.versions?.electron || 'N/A')
+const electronVersion = ref(
+  navigator.userAgent.match(/Electron\/([\d.]+)/)?.[1] || 'N/A'
+)
 
 const cookieSummary = computed(() => {
   const map: Record<string, number> = {}

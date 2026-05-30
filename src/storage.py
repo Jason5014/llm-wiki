@@ -310,6 +310,35 @@ def concept_page_exists(kb_id: str, name: str) -> bool:
 
 
 # ─────────────────────────────────────────────
+# 抽取结果持久化（Stage 3a 原始输出）
+# ─────────────────────────────────────────────
+
+def extraction_path(kb_id: str) -> Path:
+    """抽取结果 JSON 路径"""
+    return wiki_dir(kb_id) / "extraction.json"
+
+
+async def save_extraction(kb_id: str, entities: list, concepts: list) -> None:
+    """保存实体/概念抽取结果（Stage 3a 原始输出）"""
+    data = {
+        "entities": [e if isinstance(e, dict) else e.model_dump() for e in entities],
+        "concepts": [c if isinstance(c, dict) else c.model_dump() for c in concepts],
+        "updated_at": datetime.now().isoformat(),
+    }
+    path = extraction_path(kb_id)
+    async with aiofiles.open(path, "w", encoding="utf-8") as f:
+        await f.write(json.dumps(data, ensure_ascii=False, indent=2))
+
+
+def load_extraction(kb_id: str) -> dict | None:
+    """加载实体/概念抽取结果"""
+    path = extraction_path(kb_id)
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+# ─────────────────────────────────────────────
 # 图谱数据存储
 # ─────────────────────────────────────────────
 

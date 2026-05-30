@@ -2,7 +2,25 @@
  * 采集器全局状态
  */
 import { defineStore } from 'pinia'
-import { ref, computed, toRaw } from 'vue'
+import { ref, computed, toRaw, isRef } from 'vue'
+
+/**
+ * 深度解包 Vue 响应式对象，确保可通过 Electron IPC 结构化克隆。
+ * toRaw() 只解包顶层 Proxy，嵌套的 ref/proxy 需要递归处理。
+ */
+function deepToRaw<T>(obj: T): any {
+  if (obj === null || typeof obj !== 'object') return obj
+  // ref → 解包 .value
+  if (isRef(obj)) return deepToRaw((obj as any).value)
+  // Proxy → 取原始对象
+  const raw = toRaw(obj)
+  if (Array.isArray(raw)) return raw.map(item => deepToRaw(item))
+  const result: Record<string, unknown> = {}
+  for (const key of Object.keys(raw)) {
+    result[key] = deepToRaw(raw[key])
+  }
+  return result
+}
 
 export interface QueueItem {
   id: string
@@ -88,7 +106,7 @@ export const useCollectorStore = defineStore('collector', () => {
 
   async function createKb(params: { name: string; domain?: string[]; description?: string }): Promise<KBInfo> {
     if (!isElectron) throw new Error('请在 Electron 应用中操作')
-    const kb = await collector.createKb(toRaw(params)) as KBInfo
+    const kb = await collector.createKb(deepToRaw(params)) as KBInfo
     await loadKbList()           // 刷新列表
     currentKbId.value = kb.kb_id // 自动切换到新建的 KB
     await saveSettings()
@@ -121,7 +139,7 @@ export const useCollectorStore = defineStore('collector', () => {
   }): Promise<string> {
     if (!isElectron) throw new Error('请在 Electron 应用中操作')
     if (!currentKbId.value) throw new Error('请先选择知识库')
-    const result = await collector.submitDoc(currentKbId.value, toRaw(extractResult))
+    const result = await collector.submitDoc(currentKbId.value, deepToRaw(extractResult))
     return result.doc_id
   }
 
@@ -136,7 +154,7 @@ export const useCollectorStore = defineStore('collector', () => {
       metadata: item.metadata || {},
     }))
 
-    const result = await collector.batchSubmit(currentKbId.value, toRaw(docs))
+    const result = await collector.batchSubmit(currentKbId.value, deepToRaw(docs))
 
     result.doc_ids.forEach((docId: string, i: number) => {
       updateQueueItem(pendingItems[i].id, { docId })

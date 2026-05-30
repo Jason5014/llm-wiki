@@ -115,20 +115,26 @@ const kb = computed(() => kbStore.kbList.find(k => k.kb_id === kbId.value))
 const stages = [
   { key: 'raw', icon: '📥', label: '数据采集', statKey: 'raw_count' },
   { key: 'source', icon: '📄', label: 'Source 摘要', statKey: 'source_count' },
-  { key: 'extract', icon: '🔍', label: '实体/概念抽取', statKey: null },
-  { key: 'index', icon: '⚡', label: '建立索引', statKey: null },
+  { key: 'extract', icon: '🔍', label: '实体/概念抽取', statKey: '_extract' },
+  { key: 'index', icon: '⚡', label: '建立索引', statKey: '_index' },
 ]
 
 function getStageCount(stage: any) {
-  if (!kb.value?.stats || !stage.statKey) return '—'
-  return kb.value.stats[stage.statKey as keyof typeof kb.value.stats] ?? '—'
+  if (!kb.value?.stats) return '—'
+  const s = kb.value.stats
+  if (stage.statKey === '_extract') return `${s.entity_count ?? 0} / ${s.concept_count ?? 0}`
+  if (stage.statKey === '_index') return s.indexed ? '✅' : '—'
+  if (!stage.statKey) return '—'
+  return s[stage.statKey as keyof typeof s] ?? '—'
 }
 
 function getStageClass(stage: any) {
   if (!kb.value?.stats) return ''
-  if (stage.key === 'raw' && kb.value.stats.raw_count > 0) return 'done'
-  if (stage.key === 'source' && kb.value.stats.source_count > 0) return 'done'
-  if (stage.key === 'index' && kb.value.stats.indexed) return 'done'
+  const s = kb.value.stats
+  if (stage.key === 'raw' && s.raw_count > 0) return 'done'
+  if (stage.key === 'source' && s.source_count > 0) return 'done'
+  if (stage.key === 'extract' && (s.entity_count > 0 || s.concept_count > 0)) return 'done'
+  if (stage.key === 'index' && s.indexed) return 'done'
   return ''
 }
 
@@ -161,7 +167,9 @@ async function runPipeline(stage: string) {
       if (!event.data) return
       try {
         const data = JSON.parse(event.data)
-        if (data.message) addLog(data.message, data.status === 'error' ? 'error' : 'info')
+        // level=warning → 红色日志但不中断；status=error → 致命错误
+        const logType = (data.status === 'error' || data.level === 'warning') ? 'error' : 'info'
+        if (data.message) addLog(data.message, logType)
         if (data.progress !== undefined) {
           currentTask.value.progress = data.progress
           currentTask.value.completed = data.completed

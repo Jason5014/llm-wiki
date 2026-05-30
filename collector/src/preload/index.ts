@@ -23,7 +23,12 @@ export interface CrawlTask {
 
 export interface CollectorAPI {
   // 设置
-  getSettings: () => Promise<{ apiBaseUrl: string; currentKbId: string }>
+  getSettings: () => Promise<{
+    apiBaseUrl: string
+    currentKbId: string
+    bookmarks?: { name: string; url: string }[]
+    presetUrls?: { name: string; urls: string[] }[]
+  }>
   setSettings: (settings: Record<string, unknown>) => Promise<boolean>
 
   // 知识库 API

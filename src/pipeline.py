@@ -7,11 +7,12 @@ import uuid
 from datetime import datetime
 
 from src.indexer.indexer import build_fts_index, build_vector_index
-from src.models import PipelineStage, RunPipelineRequest, TaskState, TaskStatus
+from src.models import ConceptData, EntityData, PipelineStage, RunPipelineRequest, TaskState, TaskStatus
 from src.processor.entity_concept_extractor import extract_entities_concepts
 from src.processor.index_builder import build_graph_json, build_index_md
 from src.processor.page_builder import build_all_pages
 from src.processor.source_processor import process_all_sources
+from src.storage import load_extraction
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +91,14 @@ async def _execute_pipeline(task: TaskState, req: RunPipelineRequest) -> None:
             "message": message,
         })
 
+    async def on_error(message: str) -> None:
+        """上报非致命错误到 SSE（前端显示为红色日志，但不中断流水线）"""
+        task.errors.append(message)
+        await _push_event(task.task_id, {
+            "level": "warning",
+            "message": f"⚠️ {message}",
+        })
+
     try:
         stage = req.stage
 
@@ -97,24 +106,54 @@ async def _execute_pipeline(task: TaskState, req: RunPipelineRequest) -> None:
         if stage in (PipelineStage.all, PipelineStage.source):
             task.message = "阶段 2：生成 Source 摘要..."
             await _push_event(task.task_id, {"stage": "source", "message": task.message})
-            await process_all_sources(
+            source_pages = await process_all_sources(
                 kb_id,
                 force=req.force,
                 doc_ids=req.doc_ids or None,
                 progress_callback=progress,
+                error_callback=on_error,
             )
 
+            if not source_pages and stage == PipelineStage.source:
+                await on_error("Source 摘要生成失败，无法继续后续阶段")
+                task.status = TaskStatus.error
+                task.message = "❌ Source 阶段失败"
+                await _push_event(task.task_id, {"status": "error", "message": task.message})
+                return
+
         # Stage 3a: 实体/概念抽取
-        if stage in (PipelineStage.all, PipelineStage.extract, PipelineStage.pages):
+        entities: list[EntityData] = []
+        concepts: list[ConceptData] = []
+
+        if stage in (PipelineStage.all, PipelineStage.extract):
             task.message = "阶段 3a：抽取实体和概念..."
             await _push_event(task.task_id, {"stage": "extract", "message": task.message})
             entities, concepts = await extract_entities_concepts(
                 kb_id,
                 progress_callback=progress,
+                error_callback=on_error,
             )
 
-            # Stage 3b: 页面生成
-            if stage in (PipelineStage.all, PipelineStage.pages):
+            if not entities and not concepts:
+                await on_error("实体/概念抽取结果为空，请检查 LLM API 配置或 source 页面内容")
+            else:
+                await _push_event(task.task_id, {
+                    "message": f"✅ 抽取完成：{len(entities)} 个实体，{len(concepts)} 个概念",
+                })
+
+        # Stage 3b: 页面生成
+        if stage in (PipelineStage.all, PipelineStage.pages):
+            # 如果是独立运行 pages stage，从已保存的抽取结果加载
+            if not entities and not concepts and stage == PipelineStage.pages:
+                saved = load_extraction(kb_id)
+                if saved:
+                    entities = [EntityData(**e) for e in saved.get("entities", [])]
+                    concepts = [ConceptData(**c) for c in saved.get("concepts", [])]
+                    await _push_event(task.task_id, {
+                        "message": f"📂 从已保存的抽取结果加载：{len(entities)} 实体，{len(concepts)} 概念",
+                    })
+
+            if entities or concepts:
                 task.message = "阶段 3b：生成 Wiki 页面..."
                 await _push_event(task.task_id, {"stage": "pages", "message": task.message})
                 await build_all_pages(
@@ -124,6 +163,8 @@ async def _execute_pipeline(task: TaskState, req: RunPipelineRequest) -> None:
                     force=req.force,
                     progress_callback=progress,
                 )
+            else:
+                await on_error("无可用的实体/概念数据，请先运行「仅实体/概念抽取」")
 
         # Stage 4: 索引构建
         if stage in (PipelineStage.all, PipelineStage.index):

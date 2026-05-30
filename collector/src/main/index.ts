@@ -21,6 +21,7 @@ export const store = new Store({
       { name: '少数派', url: 'https://sspai.com' },
       { name: 'GitHub', url: 'https://github.com' },
     ],
+    presetUrls: [] as { name: string; urls: string[] }[],
   },
 })
 

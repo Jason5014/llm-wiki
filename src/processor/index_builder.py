@@ -188,15 +188,36 @@ def _extract_aliases_from_frontmatter(content: str, target: str, store: dict) ->
 
 async def build_graph_json(kb_id: str) -> dict[str, Any]:
     """
-    从所有 entity/concept 页面提取 [[WikiLink]]，生成图谱数据
+    从所有 wiki 页面提取 [[WikiLink]]，生成图谱数据（含 entity/concept/source/index）
     """
     nodes: dict[str, dict] = {}
     edge_set: set[tuple] = set()
 
+    source_pages = list_wiki_pages(kb_id, "source")
     entity_pages = list_wiki_pages(kb_id, "entity")
     concept_pages = list_wiki_pages(kb_id, "concept")
 
-    # 先注册所有节点
+    # 注册 index 根节点
+    nodes["index:root"] = {
+        "id": "index:root",
+        "label": "索引",
+        "type": "index",
+        "category": "index",
+        "description": "全局知识库索引",
+    }
+
+    # 注册 source 节点
+    for p in source_pages:
+        node_id = f"source:{p.name}"
+        nodes[node_id] = {
+            "id": node_id,
+            "label": p.name,
+            "type": "source",
+            "category": "source",
+            "description": p.description,
+        }
+
+    # 注册 entity 节点
     for p in entity_pages:
         node_id = f"entity:{p.name}"
         nodes[node_id] = {
@@ -207,6 +228,7 @@ async def build_graph_json(kb_id: str) -> dict[str, Any]:
             "description": p.description,
         }
 
+    # 注册 concept 节点
     for p in concept_pages:
         node_id = f"concept:{p.name}"
         nodes[node_id] = {
@@ -219,9 +241,12 @@ async def build_graph_json(kb_id: str) -> dict[str, Any]:
 
     # 提取边（WikiLink 引用关系）
     edges_list: list[dict] = []
+
+    # 所有可链接名称（entity + concept + source）
     all_names = (
         {p.name.lower(): f"entity:{p.name}" for p in entity_pages}
         | {p.name.lower(): f"concept:{p.name}" for p in concept_pages}
+        | {p.name.lower(): f"source:{p.name}" for p in source_pages}
     )
 
     def _process_page(page_type: str, name: str):
@@ -231,7 +256,7 @@ async def build_graph_json(kb_id: str) -> dict[str, Any]:
         source_id = f"{page_type}:{name}"
         links = extract_wikilinks(content)
         for link in links:
-            # 去掉可能的路径前缀
+            # 去掉可能的路径前缀（如 source/xxx → xxx）
             link_name = link.split("/")[-1]
             target_id = all_names.get(link_name.lower())
             if target_id and target_id != source_id:
@@ -249,6 +274,33 @@ async def build_graph_json(kb_id: str) -> dict[str, Any]:
         _process_page("entity", p.name)
     for p in concept_pages:
         _process_page("concept", p.name)
+    for p in source_pages:
+        _process_page("source", p.name)
+
+    # source → index 边（source 页面被索引收录）
+    for p in source_pages:
+        edges_list.append({
+            "source": f"source:{p.name}",
+            "target": "index:root",
+            "type": "indexed",
+            "weight": 0.5,
+        })
+
+    # entity/concept → index 边
+    for p in entity_pages:
+        edges_list.append({
+            "source": f"entity:{p.name}",
+            "target": "index:root",
+            "type": "indexed",
+            "weight": 0.5,
+        })
+    for p in concept_pages:
+        edges_list.append({
+            "source": f"concept:{p.name}",
+            "target": "index:root",
+            "type": "indexed",
+            "weight": 0.5,
+        })
 
     graph_data = {
         "nodes": list(nodes.values()),

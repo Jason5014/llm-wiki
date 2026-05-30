@@ -68,12 +68,13 @@ async def chat_json(
     messages: list[dict[str, str]],
     model: str | None = None,
     temperature: float = 0.1,
+    max_tokens: int = 8192,
 ) -> dict[str, Any] | list[Any]:
     """
     调用 LLM 并解析 JSON 响应
     若 LLM 返回包裹在 ```json ... ``` 中的内容也能正确解析
     """
-    raw = await chat_completion(messages, model=model, temperature=temperature)
+    raw = await chat_completion(messages, model=model, temperature=temperature, max_tokens=max_tokens)
     return extract_json(raw)
 
 
@@ -103,7 +104,11 @@ def extract_json(text: str) -> dict[str, Any] | list[Any]:
             except json.JSONDecodeError:
                 continue
 
-    raise ValueError(f"无法从 LLM 输出中提取 JSON：{text[:200]}...")
+    # 诊断信息：判断是否是截断导致的失败
+    hint = ""
+    if len(text) > 3000 and not text.rstrip().endswith("}"):
+        hint = "（可能是 max_tokens 不足导致 JSON 被截断）"
+    raise ValueError(f"无法从 LLM 输出中提取 JSON{hint}，原始输出前 500 字符：\n{text[:500]}")
 
 
 # ─────────────────────────────────────────────

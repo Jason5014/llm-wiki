@@ -64,12 +64,13 @@ const pageType = computed(() => route.params.pageType as string)
 const pageName = computed(() => route.params.name as string)
 const kbName = computed(() => kbStore.kbList.find(k => k.kb_id === kbId.value)?.name || kbId.value)
 
-// Markdown 渲染器（带 WikiLink 支持）
-const md = new MarkdownIt({ html: false, linkify: true, typographer: true })
+// Markdown 渲染器
+const md = new MarkdownIt({ html: true, linkify: true, typographer: true })
 
 function renderWithWikiLinks(raw: string): string {
-  // 替换 [[WikiLink|显示文本]] 和 [[WikiLink]]
-  const processed = raw
+  // 先渲染 Markdown，再替换 [[WikiLink]]（避免 html:false 转义 <a> 标签）
+  const html = md.render(raw)
+  return html
     .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, (_, target, display) => {
       const path = _resolveWikiPath(target)
       return `<a class="wiki-link" data-wiki="${target}" href="${path}">${display}</a>`
@@ -79,7 +80,6 @@ function renderWithWikiLinks(raw: string): string {
       const path = _resolveWikiPath(target)
       return `<a class="wiki-link" data-wiki="${target}" href="${path}">${display}</a>`
     })
-  return md.render(processed)
 }
 
 function _resolveWikiPath(target: string): string {

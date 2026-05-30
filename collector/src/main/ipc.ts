@@ -50,6 +50,7 @@ export function setupIpcHandlers(store: InstanceType<typeof Store<Record<string,
       apiBaseUrl: store.get('apiBaseUrl'),
       currentKbId: store.get('currentKbId'),
       bookmarks: store.get('bookmarks'),
+      presetUrls: store.get('presetUrls'),
     }
   })
 

@@ -136,10 +136,26 @@
     <el-empty v-else description="队列为空，去浏览页面采集内容吧" />
 
     <!-- 批量添加 URL 弹窗 -->
-    <el-dialog v-model="showBatchDialog" title="批量添加 URL" width="560px">
-      <p style="margin-top:0;color:var(--el-text-color-secondary)">
-        每行一个 URL，支持知乎文章/问题、小红书笔记及任意网页
-      </p>
+    <el-dialog v-model="showBatchDialog" title="批量添加 URL" width="600px">
+      <!-- 预设 URL 分组 -->
+      <div class="preset-section">
+        <div class="preset-label">快速添加预设：</div>
+        <div class="preset-groups">
+          <el-button
+            v-for="group in presetGroups"
+            :key="group.name"
+            size="small"
+            plain
+            @click="loadPreset(group)"
+          >
+            {{ group.name }}（{{ group.urls.length }}）
+          </el-button>
+          <el-button size="small" type="info" plain @click="openPresetEditor">
+            <el-icon><Setting /></el-icon> 管理预设
+          </el-button>
+        </div>
+      </div>
+
       <el-input
         v-model="batchUrlsText"
         type="textarea"
@@ -153,6 +169,32 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 预设管理弹窗 -->
+    <el-dialog v-model="showPresetEditor" title="管理预设 URL 分组" width="620px">
+      <div class="preset-editor">
+        <div v-for="(group, idx) in editablePresets" :key="idx" class="preset-edit-item">
+          <div class="preset-edit-header">
+            <el-input v-model="group.name" size="small" placeholder="分组名称" style="width: 160px" />
+            <el-button size="small" type="danger" text @click="editablePresets.splice(idx, 1)">删除</el-button>
+          </div>
+          <el-input
+            v-model="group.urlsText"
+            type="textarea"
+            :rows="3"
+            placeholder="每行一个 URL"
+            size="small"
+          />
+        </div>
+        <el-button size="small" @click="editablePresets.push({ name: '', urls: [], urlsText: '' })" style="margin-top: 8px">
+          + 添加分组
+        </el-button>
+      </div>
+      <template #footer>
+        <el-button @click="showPresetEditor = false">取消</el-button>
+        <el-button type="primary" @click="savePresets">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -163,6 +205,76 @@ import { useCollectorStore, type QueueItem } from '../stores/collector'
 import { extract } from '../extractors'
 
 const store = useCollectorStore()
+
+// ── 预设 URL 分组 ────────────────────────────────────────────
+
+interface PresetGroup {
+  name: string
+  urls: string[]
+}
+
+const DEFAULT_PRESETS: PresetGroup[] = [
+  // 用户可通过「管理预设」添加已验证可自动采集的 URL 分组
+]
+
+const presetGroups = ref<PresetGroup[]>([])
+const showPresetEditor = ref(false)
+const editablePresets = ref<(PresetGroup & { urlsText: string })[]>([])
+
+async function loadPresets() {
+  try {
+    const settings = await window.collector.getSettings()
+    const saved = settings?.presetUrls
+    presetGroups.value = saved?.length ? saved : DEFAULT_PRESETS
+  } catch {
+    presetGroups.value = DEFAULT_PRESETS
+  }
+}
+
+function loadPreset(group: PresetGroup) {
+  const existing = new Set(
+    batchUrlsText.value
+      .split('\n')
+      .map(l => l.trim())
+      .filter(Boolean)
+  )
+  const newUrls = group.urls.filter(u => !existing.has(u))
+  if (!newUrls.length) {
+    ElMessage.info('这些 URL 已在列表中')
+    return
+  }
+  const prefix = batchUrlsText.value.trim() ? batchUrlsText.value.trim() + '\n' : ''
+  batchUrlsText.value = prefix + newUrls.join('\n')
+  ElMessage.success(`已添加 ${newUrls.length} 个 URL`)
+}
+
+function openPresetEditor() {
+  editablePresets.value = presetGroups.value.map(g => ({
+    ...g,
+    urlsText: g.urls.join('\n'),
+  }))
+  showPresetEditor.value = true
+}
+
+async function savePresets() {
+  const groups: PresetGroup[] = editablePresets.value
+    .map(g => ({
+      name: g.name.trim(),
+      urls: g.urlsText
+        .split('\n')
+        .map(l => l.trim())
+        .filter(l => l.startsWith('http')),
+    }))
+    .filter(g => g.name && g.urls.length)
+  presetGroups.value = groups
+  try {
+    await window.collector.setSettings({ presetUrls: groups })
+  } catch (e) {
+    console.warn('Failed to save presets:', e)
+  }
+  showPresetEditor.value = false
+  ElMessage.success('预设已保存')
+}
 
 // ── refs ─────────────────────────────────────────────────────
 
@@ -254,6 +366,7 @@ onUnmounted(() => stopPoll())
 function openBatchDialog() {
   batchUrlsText.value = ''
   showBatchDialog.value = true
+  loadPresets()
 }
 
 function confirmBatchAdd() {
@@ -532,5 +645,36 @@ async function saveAllDone() {
 @keyframes rotate {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
+}
+
+.preset-section {
+  margin-bottom: 12px;
+}
+.preset-label {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 8px;
+}
+.preset-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.preset-editor {
+  max-height: 400px;
+  overflow-y: auto;
+}
+.preset-edit-item {
+  margin-bottom: 12px;
+  padding: 10px;
+  background: var(--el-fill-color-lighter);
+  border-radius: 6px;
+}
+.preset-edit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
 }
 </style>

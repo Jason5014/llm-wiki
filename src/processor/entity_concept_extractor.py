@@ -8,7 +8,7 @@ from collections import defaultdict
 from src.config import settings
 from src.llm import chat_json, llm_executor
 from src.models import ConceptData, EntityData
-from src.storage import list_wiki_pages, load_wiki_page
+from src.storage import list_wiki_pages, load_wiki_page, save_extraction
 
 logger = logging.getLogger(__name__)
 
@@ -69,10 +69,12 @@ async def extract_entities_concepts(
     kb_id: str,
     doc_ids: list[str] | None = None,
     progress_callback=None,
+    error_callback=None,
 ) -> tuple[list[EntityData], list[ConceptData]]:
     """
     批量抽取所有实体和概念
     Returns: (entities, concepts)
+    error_callback(msg) 用于上报非致命错误（如单批次 LLM 失败）
     """
     # 获取所有 source 页面
     if doc_ids:
@@ -82,7 +84,10 @@ async def extract_entities_concepts(
         all_source_ids = [p.name for p in pages]
 
     if not all_source_ids:
-        logger.warning("没有可用的 source 页面")
+        msg = "没有可用的 source 页面，无法抽取实体/概念"
+        logger.warning(msg)
+        if error_callback:
+            await error_callback(msg)
         return [], []
 
     total = len(all_source_ids)
@@ -97,6 +102,8 @@ async def extract_entities_concepts(
     all_entities: dict[str, EntityData] = {}
     all_concepts: dict[str, ConceptData] = {}
     completed_batches = 0
+    failed_batches = 0
+    errors: list[str] = []
 
     for batch_idx, batch in enumerate(batches):
         logger.info(f"处理批次 {batch_idx + 1}/{len(batches)}")
@@ -120,7 +127,12 @@ async def extract_entities_concepts(
                 ])
             )
         except Exception as e:
-            logger.error(f"批次 {batch_idx + 1} LLM 调用失败：{e}")
+            failed_batches += 1
+            err_msg = f"批次 {batch_idx + 1}/{len(batches)} LLM 调用失败：{e}"
+            logger.error(err_msg)
+            errors.append(err_msg)
+            if error_callback:
+                await error_callback(err_msg)
             continue
 
         # 合并实体
@@ -141,7 +153,19 @@ async def extract_entities_concepts(
 
     entities = list(all_entities.values())
     concepts = list(all_concepts.values())
-    logger.info(f"抽取完成：{len(entities)} 实体，{len(concepts)} 概念")
+    logger.info(f"抽取完成：{len(entities)} 实体，{len(concepts)} 概念，失败批次：{failed_batches}")
+
+    # 所有批次都失败了 → 上报致命错误
+    if failed_batches > 0 and completed_batches == 0:
+        err_msg = f"所有 {failed_batches} 个批次均失败，可能是 LLM API Key 无效或服务不可用。第一个错误：{errors[0] if errors else '未知'}"
+        if error_callback:
+            await error_callback(err_msg)
+
+    # 持久化抽取结果（无论成功与否，有数据就保存）
+    if entities or concepts:
+        await save_extraction(kb_id, entities, concepts)
+        logger.info(f"抽取结果已保存：{len(entities)} 实体，{len(concepts)} 概念")
+
     return entities, concepts
 
 
